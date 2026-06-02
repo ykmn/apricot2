@@ -14,12 +14,15 @@ const Timeline = (() => {
   // ── Row definitions ─────────────────────────────────────────────────────
   // timePerCell: how many real seconds one labeled cell represents
   // cellWidth:   pixels per cell
+  // Cell widths measured from reference screenshot (~1540px wide):
+  //   seconds ~24px, minutes ~50px, hours ~100px, days ~200px, months ~400px
+  //   ratio 1:2:4:8:16, font size scales with cell width
   const ROW_DEFS = [
-    { id: 'tl-seconds', timePerCell: 1,          cellWidth: 28,  unit: 'second' },
-    { id: 'tl-minutes', timePerCell: 60,          cellWidth: 28,  unit: 'minute' },
-    { id: 'tl-hours',   timePerCell: 3600,        cellWidth: 44,  unit: 'hour',   tall: true },
-    { id: 'tl-days',    timePerCell: 86400,       cellWidth: 110, unit: 'day'   },
-    { id: 'tl-months',  timePerCell: 30 * 86400,  cellWidth: 110, unit: 'month' },
+    { id: 'tl-seconds', timePerCell: 1,          cellWidth: 24,  unit: 'second', fontSize:  9 },
+    { id: 'tl-minutes', timePerCell: 60,          cellWidth: 50,  unit: 'minute', fontSize: 11 },
+    { id: 'tl-hours',   timePerCell: 3600,        cellWidth: 100, unit: 'hour',   fontSize: 13 },
+    { id: 'tl-days',    timePerCell: 86400,       cellWidth: 200, unit: 'day',    fontSize: 12 },
+    { id: 'tl-months',  timePerCell: 30 * 86400,  cellWidth: 400, unit: 'month',  fontSize: 13 },
   ];
 
   // Color scheme — reads from CSS custom properties so light/dark theme works
@@ -67,6 +70,19 @@ const Timeline = (() => {
   let isPlaying = false;
   let playbackStart = null;
   let playbackTimer = null;
+  let CELL_FONT_SIZE = 12;              // computed in init()
+
+  // Find the largest integer font size (px) at which testStr fits within
+  // (cellWidth - padding) pixels on a canvas.
+  function _computeMaxFontSize(cellWidth, testStr, maxSize, padding) {
+    const tmp = document.createElement('canvas').getContext('2d');
+    const avail = cellWidth - (padding || 4);
+    for (let s = (maxSize || 32); s >= 6; s--) {
+      tmp.font = `${s}px "Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif`;
+      if (tmp.measureText(testStr).width <= avail) return s;
+    }
+    return 6;
+  }
 
   // ── Initialise ───────────────────────────────────────────────────────────
   function init(callbacks = {}) {
@@ -78,6 +94,10 @@ const Timeline = (() => {
       const ctx = canvas.getContext('2d');
       return { ...def, canvas, ctx };
     });
+
+    // Max font size that fits the narrowest cell (seconds = 24px), text "00"
+    const narrowestCell = ROW_DEFS[0].cellWidth;
+    CELL_FONT_SIZE = _computeMaxFontSize(narrowestCell, '00');
 
     rows.forEach(row => _attachEvents(row));
     window.addEventListener('resize', () => { _resizeAll(); drawAll(); });
@@ -232,7 +252,7 @@ const Timeline = (() => {
       if (cx < -cellWidth || cx > W + cellWidth) continue;
 
       ctx.fillStyle = TC.text;
-      ctx.font = tall ? 'bold 12px monospace' : '11px monospace';
+      ctx.font = `${CELL_FONT_SIZE}px "Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, cx, H / 2);
@@ -255,8 +275,8 @@ const Timeline = (() => {
       case 'minute': return _z2(d.getMinutes());
       case 'hour':   return _z2(d.getHours());
       case 'day': {
-        const dayNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
-        return `${d.getDate()} (${dayNames[d.getDay()]})`;
+        const dayNames = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+        return `${_z2(d.getDate())} (${dayNames[d.getDay()]})`;
       }
       case 'month': {
         const monthNames = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];

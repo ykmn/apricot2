@@ -125,7 +125,12 @@ async def reload_config() -> dict:
             await ws.send_text(msg)
         except Exception:
             pass
-    return {"ok": True, "stations": len(stations_map), "playlists": len(playlists_map)}
+    return {
+        "ok": True,
+        "stations": len(stations_map),
+        "channels": len(channels_map),
+        "playlists": len(playlists_map),
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

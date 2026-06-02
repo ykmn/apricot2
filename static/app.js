@@ -223,11 +223,16 @@ function initTransport() {
   document.getElementById('btn-add-log').addEventListener('click', () => {
     const { start, end } = Timeline.getSelection();
     if (start === null || end === null) {
-      alert('Сначала выделите фрагмент (◀| и |▶)');
+      alert('Сначала выделите фрагмент кнопками In и Out');
       return;
     }
     if (!currentChannel) {
       alert('Выберите канал записи');
+      return;
+    }
+    const durSec = Math.abs(end - start);
+    if (durSec > MAX_SEGMENT_SEC) {
+      alert('Слишком большой сегмент — экспорт не будет корректным.\nВыделите фрагмент не длиннее 3 часов.');
       return;
     }
     addLogItem({
@@ -242,10 +247,6 @@ function initTransport() {
   document.getElementById('btn-now').addEventListener('click', () => {
     Timeline.setTime(Date.now() / 1000);
   });
-
-  // Navigate to prev/next file
-  document.getElementById('btn-prev-file').addEventListener('click', () => navigateFile(-1));
-  document.getElementById('btn-next-file').addEventListener('click', () => navigateFile(1));
 
   audio.addEventListener('ended', () => stopPlay());
 }
@@ -291,13 +292,19 @@ function _startPlayheadAnimation() {
   playAnimFrame = requestAnimationFrame(frame);
 }
 
-async function navigateFile(dir) {
-  // Not implemented in minimal version — would require querying sorted file list
-}
+
+const MAX_SEGMENT_SEC = 3 * 3600;  // 3 hours
 
 function updateSelLabel(s, e) {
-  const lbl = document.getElementById('sel-label');
-  if (s === null && e === null) { lbl.textContent = '—'; return; }
+  const lbl  = document.getElementById('sel-label');
+  const warn = document.getElementById('sel-warning');
+
+  if (s === null && e === null) {
+    lbl.textContent = '—';
+    warn.classList.add('hidden');
+    return;
+  }
+
   const durSec = (s !== null && e !== null) ? Math.abs(e - s) : null;
   const parts = [];
   if (s !== null) parts.push(_tsToHMS(s));
@@ -305,6 +312,13 @@ function updateSelLabel(s, e) {
   let txt = parts.join(' → ');
   if (durSec !== null) txt += `  [${_secToDuration(durSec)}]`;
   lbl.textContent = txt;
+
+  if (durSec !== null && durSec > MAX_SEGMENT_SEC) {
+    warn.textContent = '⚠ Слишком большой сегмент, экспорт не будет корректным';
+    warn.classList.remove('hidden');
+  } else {
+    warn.classList.add('hidden');
+  }
 }
 
 function _tsToHMS(ts) {
@@ -614,7 +628,7 @@ function initHamburgerMenu() {
       const res = await api('/api/reload', { method: 'POST' });
       await loadStations();
       buildChannelDropdown();
-      alert(`Конфигурация обновлена.\nСтанций: ${res.stations}, плейлогов: ${res.playlists}`);
+      alert(`Конфигурация обновлена.\nСтанций: ${res.stations}, каналов: ${res.channels}, плейлогов: ${res.playlists}`);
     } catch (e) {
       alert('Ошибка обновления конфигурации: ' + e.message);
     }

@@ -210,12 +210,21 @@ body {
 
 button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; padding: 5px 12px; }
 
+/* All transport-bar buttons share the same height */
+#transport button {
+  height: 34px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .btn-transport {
   background: var(--accent);
   color: #fff;
   font-size: 16px;
   width: 38px;
-  padding: 4px 0;
+  padding: 0;
 }
 .btn-transport:hover { filter: brightness(1.2); }
 
@@ -223,10 +232,14 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   background: var(--bg3);
   color: var(--text);
   font-size: 13px;
-  padding: 5px 10px;
+  font-weight: 600;
+  padding: 0 12px;
   border: 1px solid var(--border);
+  letter-spacing: 0.03em;
 }
 .btn-mark:hover { border-color: var(--accent); color: var(--accent); }
+/* Push In/Out away from Play by one Play-button width */
+#btn-mark-in { margin-left: 38px; }
 
 .btn-nav {
   background: var(--bg3);
@@ -502,6 +515,21 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   color: var(--text2);
   padding: 6px 14px 8px;
   user-select: none;
+}
+
+/* ── Segment warning ──────────────────────────────────────── */
+#sel-warning {
+  color: #e74c3c;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(231,76,60,0.1);
+  border: 1px solid rgba(231,76,60,0.4);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+[data-theme="light"] #sel-warning {
+  background: rgba(214,48,48,0.08);
+  border-color: rgba(214,48,48,0.35);
 }
 
 /* ── Light theme overrides for hover states ───────────────── */

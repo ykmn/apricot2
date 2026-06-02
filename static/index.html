@@ -49,25 +49,24 @@
 
   <!-- ── Timeline rows ────────────────────────────────────────────── -->
   <div id="timeline-container">
-    <canvas id="tl-seconds" class="tl-row" height="28"></canvas>
-    <canvas id="tl-minutes" class="tl-row" height="28"></canvas>
-    <canvas id="tl-hours"   class="tl-row" height="64"></canvas>
-    <canvas id="tl-days"    class="tl-row" height="30"></canvas>
-    <canvas id="tl-months"  class="tl-row" height="26"></canvas>
+    <canvas id="tl-seconds" class="tl-row" height="42"></canvas>
+    <canvas id="tl-minutes" class="tl-row" height="42"></canvas>
+    <canvas id="tl-hours"   class="tl-row" height="42"></canvas>
+    <canvas id="tl-days"    class="tl-row" height="42"></canvas>
+    <canvas id="tl-months"  class="tl-row" height="42"></canvas>
   </div>
 
   <!-- ── Transport controls ────────────────────────────────────────── -->
   <div id="transport">
     <div id="transport-left">
       <button id="btn-play"  class="btn-transport" title="Воспроизвести / Пауза">▶</button>
-      <button id="btn-mark-in"  class="btn-mark" title="Установить начало сегмента">◀|</button>
-      <button id="btn-mark-out" class="btn-mark" title="Установить конец сегмента">|▶</button>
+      <button id="btn-mark-in"  class="btn-mark" title="Установить начало сегмента">In</button>
+      <button id="btn-mark-out" class="btn-mark" title="Установить конец сегмента">Out</button>
       <span id="sel-label">—</span>
+      <span id="sel-warning" class="hidden"></span>
     </div>
     <div id="transport-right">
-      <button id="btn-prev-file" class="btn-nav" title="Предыдущий файл">⏮</button>
-      <button id="btn-next-file" class="btn-nav" title="Следующий файл">⏭</button>
-      <button id="btn-add-log" class="btn-action">Добавить в лог-лист</button>
+      <button id="btn-add-log" class="btn-action">Добавить сегмент</button>
       <button id="btn-clear-sel" class="btn-danger">Очистить выделение</button>
     </div>
   </div>
@@ -87,7 +86,7 @@
     <!-- Log-list -->
     <div id="loglist-panel" class="panel">
       <div class="panel-header">
-        <span>ЛОГ-ЛИСТ</span>
+        <span>ВЫБРАННЫЕ СЕГМЕНТЫ</span>
         <div>
           <button id="btn-export-all" class="btn-green btn-sm">Скачать всё</button>
           <button id="btn-clear-log"  class="btn-danger btn-sm">Очистить</button>
