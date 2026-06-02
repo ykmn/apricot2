@@ -1,0 +1,41 @@
+# Station configuration: Retro FM
+id: retro_fm
+name: "Retro FM"
+
+# Channels (recording streams) for this station
+channels:
+  - id: retro_fm_pgm_hq
+    name: "Retro FM — PGM-HQ (wav/44.1kHz)"
+    # Use local_path if the share is already mounted:
+    # local_path: "/mnt/retro_fm_pgm"       # Linux/Mac
+    # local_path: "Z:\\retro_fm_pgm"         # Windows
+    smb:
+      host: "fileserver.domain.local"
+      share: "retro_fm"
+      path: "PGM-HQ"                        # subfolder inside share (optional)
+      username: "svc_radio"
+      password_env: "RETRO_FM_PASSWORD"     # reads from environment variable
+      domain: "CORP"                        # Windows domain (optional)
+    folder_format: "%Y-%m-%d"               # e.g. 2026-06-02
+    file_format: "%H-%M-%S"                 # e.g. 18-24-06
+    file_extension: "wav"
+    sample_rate: 44100
+    playlists:
+      - retro_fm_plog
+
+  - id: retro_fm_yamal
+    name: "Retro FM — Yamal402 (mp3/64k)"
+    smb:
+      host: "fileserver2.domain.local"
+      share: "retro_fm_yamal"
+      path: ""
+      username: "svc_radio"
+      password_env: "RETRO_FM_PASSWORD"
+      domain: "CORP"
+    folder_format: "%Y-%m-%d"
+    file_format: "%H-%M-%S"
+    file_extension: "mp3"
+    sample_rate: 44100
+    bitrate: "64k"
+    playlists:
+      - retro_fm_plog

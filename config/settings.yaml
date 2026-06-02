@@ -1,0 +1,22 @@
+# Global application settings
+server:
+  host: "0.0.0.0"
+  port: 8765
+
+# How often to poll SMB shares for new/deleted files (seconds)
+watcher:
+  poll_interval: 10
+
+# Export settings
+export:
+  temp_dir: "/tmp/radio_monitor_export"   # Windows: "C:/Temp/radio_monitor"
+  default_format: "mp3"
+  default_bitrate: "192k"
+
+# ffmpeg binary path (leave empty to use system PATH)
+ffmpeg_path: "ffmpeg"
+
+# UI settings
+ui:
+  # Timezone for display (e.g. "Europe/Moscow", "UTC")
+  timezone: "Europe/Moscow"

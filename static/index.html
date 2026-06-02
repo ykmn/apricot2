@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radio Monitor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Top bar ─────────────────────────────────────────────────── -->
+  <div id="topbar">
+    <div id="channel-selector-wrap">
+      <input id="channel-search" type="text" placeholder="Поиск канала…" autocomplete="off">
+      <div id="channel-dropdown" class="dropdown hidden"></div>
+      <div id="channel-label">Выберите канал</div>
+    </div>
+    <div id="topbar-right">
+      <span class="clock-part" id="clk-day">--</span>
+      <span class="clock-sep">.</span>
+      <span class="clock-part" id="clk-month">--</span>
+      <span class="clock-sep">.</span>
+      <span class="clock-part" id="clk-year">----</span>
+      <span class="clock-sep ml">&#160;</span>
+      <span class="clock-part" id="clk-h">--</span>
+      <span class="clock-sep">:</span>
+      <span class="clock-part" id="clk-m">--</span>
+      <span class="clock-sep">:</span>
+      <span class="clock-part" id="clk-s">--</span>
+      <button id="btn-now" title="Перейти к текущему времени">⟳</button>
+    </div>
+  </div>
+
+  <!-- ── Timeline rows ────────────────────────────────────────────── -->
+  <div id="timeline-container">
+    <canvas id="tl-seconds" class="tl-row" height="28"></canvas>
+    <canvas id="tl-minutes" class="tl-row" height="28"></canvas>
+    <canvas id="tl-hours"   class="tl-row" height="64"></canvas>
+    <canvas id="tl-days"    class="tl-row" height="30"></canvas>
+    <canvas id="tl-months"  class="tl-row" height="26"></canvas>
+  </div>
+
+  <!-- ── Transport controls ────────────────────────────────────────── -->
+  <div id="transport">
+    <div id="transport-left">
+      <button id="btn-play"  class="btn-transport" title="Воспроизвести / Пауза">▶</button>
+      <button id="btn-mark-in"  class="btn-mark" title="Установить начало сегмента">◀|</button>
+      <button id="btn-mark-out" class="btn-mark" title="Установить конец сегмента">|▶</button>
+      <span id="sel-label">—</span>
+    </div>
+    <div id="transport-right">
+      <button id="btn-prev-file" class="btn-nav" title="Предыдущий файл">⏮</button>
+      <button id="btn-next-file" class="btn-nav" title="Следующий файл">⏭</button>
+      <button id="btn-add-log" class="btn-action">Добавить в лог-лист</button>
+      <button id="btn-clear-sel" class="btn-danger">Очистить выделение</button>
+    </div>
+  </div>
+
+  <!-- ── Main columns ─────────────────────────────────────────────── -->
+  <div id="main-columns">
+
+    <!-- Playlist -->
+    <div id="playlist-panel" class="panel">
+      <div class="panel-header">
+        <span>ПЛЕЙЛОГ</span>
+        <button id="btn-color-assign" class="btn-sm">Назначить цвета</button>
+      </div>
+      <div id="playlist-list" class="scrollable-list"></div>
+    </div>
+
+    <!-- Log-list -->
+    <div id="loglist-panel" class="panel">
+      <div class="panel-header">
+        <span>ЛОГ-ЛИСТ</span>
+        <div>
+          <button id="btn-export-all" class="btn-green btn-sm">Скачать всё</button>
+          <button id="btn-clear-log"  class="btn-danger btn-sm">Очистить</button>
+          <button id="btn-uploads"    class="btn-blue btn-sm">Загрузки</button>
+        </div>
+      </div>
+      <div id="loglist-items" class="scrollable-list"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Export modal ─────────────────────────────────────────────── -->
+  <div id="export-modal" class="modal hidden">
+    <div class="modal-box">
+      <h3>Экспорт сегмента</h3>
+      <label>Формат:
+        <select id="exp-format">
+          <option value="mp3">MP3</option>
+          <option value="wav">WAV PCM</option>
+          <option value="aac">AAC</option>
+        </select>
+      </label>
+      <label>Частота дискретизации:
+        <select id="exp-samplerate">
+          <option value="32000">32 000 Гц</option>
+          <option value="44100" selected>44 100 Гц</option>
+          <option value="48000">48 000 Гц</option>
+        </select>
+      </label>
+      <label id="exp-bitrate-row">Битрейт:
+        <select id="exp-bitrate">
+          <option value="320k">320 kbps</option>
+          <option value="192k" selected>192 kbps</option>
+          <option value="128k">128 kbps</option>
+          <option value="64k">64 kbps</option>
+        </select>
+      </label>
+      <div id="exp-wav-note" class="hidden" style="font-size:11px;color:var(--text2)">WAV экспортируется как PCM 16-bit без сжатия</div>
+      <div id="export-progress" class="hidden">Экспорт…</div>
+      <div class="modal-buttons">
+        <button id="exp-ok"     class="btn-green">Экспортировать</button>
+        <button id="exp-cancel" class="btn-danger">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden audio element for playback -->
+  <audio id="audio-player" preload="none"></audio>
+
+</div>
+
+<script src="/static/timeline.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

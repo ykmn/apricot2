@@ -1,0 +1,78 @@
+from __future__ import annotations
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Optional
+
+
+@dataclass
+class SMBConfig:
+    host: str
+    share: str
+    path: str = ""
+    username: str = ""
+    password: Optional[str] = None
+    password_env: Optional[str] = None
+    domain: Optional[str] = None
+
+
+@dataclass
+class ChannelConfig:
+    id: str
+    name: str
+    folder_format: str = "%Y-%m-%d"
+    file_format: str = "%H-%M-%S"
+    file_extension: str = "wav"
+    sample_rate: int = 44100
+    bitrate: Optional[str] = None
+    local_path: Optional[str] = None
+    smb: Optional[SMBConfig] = None
+    playlists: list[str] = field(default_factory=list)
+
+
+@dataclass
+class StationConfig:
+    id: str
+    name: str
+    channels: list[ChannelConfig] = field(default_factory=list)
+
+
+@dataclass
+class PlaylistConfig:
+    id: str
+    name: str
+    file_mask: str = "%Y-%m-%d.csv"
+    encoding: str = "utf-8-sig"
+    delimiter: str = ";"
+    fields: dict = field(default_factory=dict)
+    class_colors: dict = field(default_factory=dict)
+    class_names: dict = field(default_factory=dict)
+    local_path: Optional[str] = None
+    smb: Optional[SMBConfig] = None
+
+
+@dataclass
+class AudioFile:
+    channel_id: str
+    path: str          # full path (local or smb UNC)
+    start_dt: datetime
+    end_dt: datetime
+    duration: float    # seconds
+    is_smb: bool = False
+
+
+@dataclass
+class PlaylistEntry:
+    timestamp: datetime
+    title: str
+    cls: str
+    duration: Optional[float] = None
+
+
+@dataclass
+class LogItem:
+    id: str
+    channel_id: str
+    channel_name: str
+    start_time: datetime
+    end_time: datetime
+    label: str = ""
