@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Radio Monitor</title>
+  <title>Авокадо</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,11 +11,14 @@
 
   <!-- ── Top bar ─────────────────────────────────────────────────── -->
   <div id="topbar">
+    <div id="app-brand">🥑 Авокадо</div>
+
     <div id="channel-selector-wrap">
       <input id="channel-search" type="text" placeholder="Поиск канала…" autocomplete="off">
       <div id="channel-dropdown" class="dropdown hidden"></div>
       <div id="channel-label">Выберите канал</div>
     </div>
+
     <div id="topbar-right">
       <span class="clock-part" id="clk-day">--</span>
       <span class="clock-sep">.</span>
@@ -29,6 +32,18 @@
       <span class="clock-sep">:</span>
       <span class="clock-part" id="clk-s">--</span>
       <button id="btn-now" title="Перейти к текущему времени">⟳</button>
+
+      <!-- ── Hamburger ─── -->
+      <div id="hamburger-wrap">
+        <button id="btn-hamburger" title="Меню">☰</button>
+        <div id="hamburger-menu" class="hidden">
+          <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
+          <div class="menu-sep"></div>
+          <span class="menu-version" id="menu-ver">v…</span>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -31,7 +31,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   initLogList();
   initExportModal();
   initClockControls();
+  initHamburgerMenu();
   connectWebSocket();
+  loadVersion();
 
   // Default to current time
   Timeline.setTime(Date.now() / 1000);
@@ -562,12 +564,70 @@ function connectWebSocket() {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'availability_update' && currentChannel && msg.channel_id === currentChannel.id) {
       Timeline.addAvailability(msg.added, msg.removed);
+    } else if (msg.type === 'config_reloaded') {
+      loadStations().then(buildChannelDropdown);
     }
   });
 
   ws.addEventListener('close', () => {
     setTimeout(connectWebSocket, 3000);
   });
+}
+
+// ── Hamburger menu ─────────────────────────────────────────────────────────
+function initHamburgerMenu() {
+  const btn  = document.getElementById('btn-hamburger');
+  const menu = document.getElementById('hamburger-menu');
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.classList.toggle('hidden');
+  });
+
+  // Close on outside click
+  document.addEventListener('click', () => menu.classList.add('hidden'));
+  menu.addEventListener('click', e => e.stopPropagation());
+
+  // Theme toggle
+  const themeBtn = document.getElementById('menu-theme');
+  themeBtn.addEventListener('click', () => {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') !== 'light';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    themeBtn.textContent = isDark ? '🌙 Тёмный режим' : '☀️ Светлый режим';
+    localStorage.setItem('avocado-theme', isDark ? 'light' : 'dark');
+    Timeline.drawAll();   // repaint canvases with new colors
+    menu.classList.add('hidden');
+  });
+
+  // Restore saved theme
+  const saved = localStorage.getItem('avocado-theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    themeBtn.textContent = saved === 'light' ? '🌙 Тёмный режим' : '☀️ Светлый режим';
+  }
+
+  // Reload config
+  document.getElementById('menu-reload').addEventListener('click', async () => {
+    menu.classList.add('hidden');
+    try {
+      const res = await api('/api/reload', { method: 'POST' });
+      await loadStations();
+      buildChannelDropdown();
+      alert(`Конфигурация обновлена.\nСтанций: ${res.stations}, плейлогов: ${res.playlists}`);
+    } catch (e) {
+      alert('Ошибка обновления конфигурации: ' + e.message);
+    }
+  });
+}
+
+async function loadVersion() {
+  try {
+    const { version, name } = await api('/api/version');
+    const el = document.getElementById('menu-ver');
+    if (el) el.textContent = `${name} v${version}`;
+    document.title = `${name} v${version}`;
+  } catch (e) { /* ignore */ }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

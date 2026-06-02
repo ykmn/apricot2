@@ -22,7 +22,24 @@ const Timeline = (() => {
     { id: 'tl-months',  timePerCell: 30 * 86400,  cellWidth: 110, unit: 'month' },
   ];
 
-  // Color scheme
+  // Color scheme — reads from CSS custom properties so light/dark theme works
+  function _cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function _getC() {
+    return {
+      bg:         _cssVar('--tl-bg')      || '#1a1a2e',
+      bgAbsent:   _cssVar('--tl-absent')  || '#1e1e3a',
+      bgPresent:  _cssVar('--tl-present') || '#1a6bb5',
+      border:     _cssVar('--cell-border')|| '#0a3070',
+      centerLine: _cssVar('--center-line')|| '#f0d050',
+      selFill:    'rgba(240,208,80,0.18)',
+      selBorder:  _cssVar('--center-line')|| '#f0d050',
+      text:       _cssVar('--tl-text')    || '#c0c8e0',
+      textDim:    _cssVar('--tl-text-dim')|| '#5060a0',
+    };
+  }
+  // kept for backward compat — recalculated each draw
   const C = {
     bg:           '#1a1a2e',
     bgAbsent:     '#1e1e3a',
@@ -155,13 +172,14 @@ const Timeline = (() => {
     const H = canvas.height;
     if (W === 0) return;
 
+    const TC = _getC();   // theme-aware colors
+
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = C.bg;
+    ctx.fillStyle = TC.bg;
     ctx.fillRect(0, 0, W, H);
 
     const pxPerSec = cellWidth / timePerCell;
 
-    // Which cell index is at the very left edge?
     const leftTime   = centerTime - W / 2 / pxPerSec;
     const rightTime  = centerTime + W / 2 / pxPerSec;
     const firstCell  = Math.floor(leftTime / timePerCell);
@@ -175,7 +193,7 @@ const Timeline = (() => {
         if (xEnd < 0 || xStart > W) return;
         const x  = Math.max(0, xStart);
         const x2 = Math.min(W, xEnd);
-        ctx.fillStyle = C.bgPresent;
+        ctx.fillStyle = TC.bgPresent;
         ctx.fillRect(x, 0, x2 - x, H);
       });
     }
@@ -187,9 +205,9 @@ const Timeline = (() => {
       const xs = Math.round(W / 2 + (Math.min(sA,sB) - centerTime) * pxPerSec);
       const xe = Math.round(W / 2 + (Math.max(sA,sB) - centerTime) * pxPerSec);
       if (xe > 0 && xs < W) {
-        ctx.fillStyle = C.selFill;
+        ctx.fillStyle = TC.selFill;
         ctx.fillRect(Math.max(0, xs), 0, Math.min(W, xe) - Math.max(0, xs), H);
-        ctx.strokeStyle = C.selBorder;
+        ctx.strokeStyle = TC.selBorder;
         ctx.lineWidth = 1;
         if (xs >= 0 && xs < W) { ctx.beginPath(); ctx.moveTo(xs+0.5,0); ctx.lineTo(xs+0.5,H); ctx.stroke(); }
         if (xe >= 0 && xe < W) { ctx.beginPath(); ctx.moveTo(xe+0.5,0); ctx.lineTo(xe+0.5,H); ctx.stroke(); }
@@ -197,25 +215,23 @@ const Timeline = (() => {
     }
 
     // Draw cells (borders + labels)
-    ctx.strokeStyle = C.border;
+    ctx.strokeStyle = TC.border;
     ctx.lineWidth = 1;
 
     for (let ci = firstCell; ci <= lastCell; ci++) {
       const cellStart = ci * timePerCell;
       const x = Math.round(W / 2 + (cellStart - centerTime) * pxPerSec);
 
-      // Cell border
       ctx.beginPath();
       ctx.moveTo(x + 0.5, 0);
       ctx.lineTo(x + 0.5, H);
       ctx.stroke();
 
-      // Label
       const label = _cellLabel(ci, cellStart, unit);
       const cx = x + cellWidth / 2;
       if (cx < -cellWidth || cx > W + cellWidth) continue;
 
-      ctx.fillStyle = C.text;
+      ctx.fillStyle = TC.text;
       ctx.font = tall ? 'bold 12px monospace' : '11px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -228,6 +244,7 @@ const Timeline = (() => {
     ctx.beginPath();
     ctx.moveTo(W / 2, 0);
     ctx.lineTo(W / 2, H);
+    ctx.strokeStyle = TC.centerLine;
     ctx.stroke();
   }
 

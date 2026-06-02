@@ -14,7 +14,8 @@ channels:
       share: "retro_fm"
       path: "PGM-HQ"                        # subfolder inside share (optional)
       username: "svc_radio"
-      password_env: "RETRO_FM_PASSWORD"     # reads from environment variable
+      password: "secret"                    # plaintext (временно); или:
+      # password_env: "RETRO_FM_PASSWORD"   # из переменной окружения (безопаснее)
       domain: "CORP"                        # Windows domain (optional)
     folder_format: "%Y-%m-%d"               # e.g. 2026-06-02
     file_format: "%H-%M-%S"                 # e.g. 18-24-06

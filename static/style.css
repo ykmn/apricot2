@@ -1,7 +1,9 @@
 /* ── Reset & base ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
+/* ── Themes ───────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
   --bg: #1a1a2e;
   --bg2: #16213e;
   --bg3: #0f3460;
@@ -14,13 +16,35 @@
   --cell-present: #1a6bb5;
   --cell-absent: #1e1e3a;
   --cell-border: #0a3070;
-  --selection: rgba(255, 220, 50, 0.25);
+  --tl-bg: #1a1a2e;
+  --tl-text: #c0c8e0;
+  --tl-text-dim: #3a4880;
+  --tl-present: #1a6bb5;
+  --tl-absent: #1e1e3a;
   --center-line: #f0d050;
-  --row-h-seconds: 28px;
-  --row-h-minutes: 28px;
-  --row-h-hours: 64px;
-  --row-h-days: 30px;
-  --row-h-months: 26px;
+  --shadow: rgba(0,0,0,0.5);
+}
+
+[data-theme="light"] {
+  --bg: #eef0f5;
+  --bg2: #ffffff;
+  --bg3: #d8dde8;
+  --accent: #0a7ad4;
+  --accent2: #0aa860;
+  --danger: #d63030;
+  --text: #1a1a2e;
+  --text2: #5060a0;
+  --border: #b8c0d4;
+  --cell-present: #3a9de0;
+  --cell-absent: #dde4f0;
+  --cell-border: #a0b0cc;
+  --tl-bg: #dde4f0;
+  --tl-text: #1a2060;
+  --tl-text-dim: #8090c0;
+  --tl-present: #3a9de0;
+  --tl-absent: #dde4f0;
+  --center-line: #d08000;
+  --shadow: rgba(0,0,0,0.15);
 }
 
 body {
@@ -404,3 +428,83 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 }
 .modal-buttons { display: flex; gap: 8px; justify-content: flex-end; }
 #export-progress { font-style: italic; color: var(--text2); }
+
+/* ── App brand ────────────────────────────────────────────── */
+#app-brand {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent2);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ── Hamburger menu ───────────────────────────────────────── */
+#hamburger-wrap {
+  position: relative;
+  margin-left: 6px;
+}
+
+#btn-hamburger {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 18px;
+  padding: 3px 8px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+#btn-hamburger:hover {
+  background: var(--bg3);
+  border-color: var(--accent);
+}
+
+#hamburger-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px var(--shadow);
+  z-index: 300;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  padding: 9px 14px;
+  cursor: pointer;
+  width: 100%;
+  border-radius: 0;
+  transition: background 0.1s;
+}
+.menu-item:hover { background: var(--bg3); }
+
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+.menu-version {
+  display: block;
+  font-size: 11px;
+  color: var(--text2);
+  padding: 6px 14px 8px;
+  user-select: none;
+}
+
+/* ── Light theme overrides for hover states ───────────────── */
+[data-theme="light"] .playlist-row:hover { background: rgba(0,0,0,0.05); }
+[data-theme="light"] .playlist-row.active { background: rgba(10,122,212,0.12); }
+[data-theme="light"] .dropdown-channel:hover { background: var(--bg3); }

@@ -24,3 +24,7 @@ Thumbs.db
 
 # Claude Code — machine-specific
 .claude/launch.json
+
+# Экспортированные аудиофайлы
+export/*
+!export/.gitkeep

@@ -1,12 +1,10 @@
-"""FastAPI application entry point."""
+"""FastAPI application — Авокадо v0.1.002"""
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-import tempfile
-import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,24 +18,38 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
+VERSION = "0.1.002"
+PROJECT_ROOT = Path(__file__).parent.parent
+EXPORT_DIR = PROJECT_ROOT / "export"
+EXPORT_DIR.mkdir(exist_ok=True)
+
 # ──────────────────────────────────────────────────────────────────────────────
-# Bootstrap
+# Bootstrap (mutable globals — replaced on /api/reload)
 # ──────────────────────────────────────────────────────────────────────────────
 
-settings = load_settings()
-stations_map = load_stations()
-playlists_map = load_playlists()
+settings: dict = {}
+stations_map: dict = {}
+playlists_map: dict = {}
+all_channels: list = []
+channels_map: dict = {}
+poll_interval: int = 10
 
-if ffmpeg := settings.get("ffmpeg_path"):
-    set_ffmpeg_path(ffmpeg)
-
-all_channels = [ch for st in stations_map.values() for ch in st.channels]
-channels_map = {ch.id: ch for ch in all_channels}
-
-poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
-
-# WebSocket connection manager
 ws_clients: set[WebSocket] = set()
+
+
+def _load_config() -> None:
+    global settings, stations_map, playlists_map, all_channels, channels_map, poll_interval
+    settings = load_settings()
+    stations_map = load_stations()
+    playlists_map = load_playlists()
+    if ffmpeg := settings.get("ffmpeg_path"):
+        set_ffmpeg_path(ffmpeg)
+    all_channels = [ch for st in stations_map.values() for ch in st.channels]
+    channels_map = {ch.id: ch for ch in all_channels}
+    poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
+
+
+_load_config()
 
 
 def _broadcast(channel_id: str, added: list[dict], removed: list[dict]) -> None:
@@ -58,9 +70,9 @@ def _broadcast(channel_id: str, added: list[dict], removed: list[dict]) -> None:
 
 file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
 
-app = FastAPI(title="Radio Monitor")
+app = FastAPI(title="Авокадо", version=VERSION)
 
-STATIC_DIR = Path(__file__).parent.parent / "static"
+STATIC_DIR = PROJECT_ROOT / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
@@ -70,7 +82,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.on_event("startup")
 async def startup() -> None:
-    # Run initial scan in background so server starts immediately
     asyncio.create_task(_background_startup())
 
 
@@ -92,14 +103,39 @@ async def index() -> FileResponse:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# REST API
+# REST API — meta
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/version")
+async def get_version() -> dict:
+    return {"version": VERSION, "name": "Авокадо"}
+
+
+@app.post("/api/reload")
+async def reload_config() -> dict:
+    """Reload stations, playlists and settings from YAML files without restart."""
+    _load_config()
+    # Re-setup file index with new channel list
+    file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
+    asyncio.create_task(_background_startup())
+    # Notify all clients
+    msg = json.dumps({"type": "config_reloaded"})
+    for ws in list(ws_clients):
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            pass
+    return {"ok": True, "stations": len(stations_map), "playlists": len(playlists_map)}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# REST API — data
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.get("/api/stations")
 async def get_stations() -> list[dict]:
-    result = []
-    for st in stations_map.values():
-        result.append({
+    return [
+        {
             "id": st.id,
             "name": st.name,
             "channels": [
@@ -111,8 +147,9 @@ async def get_stations() -> list[dict]:
                 }
                 for ch in st.channels
             ],
-        })
-    return result
+        }
+        for st in stations_map.values()
+    ]
 
 
 @app.get("/api/availability/{channel_id}")
@@ -124,9 +161,7 @@ async def get_availability(
     idx = file_index.get_index(channel_id)
     if idx is None:
         raise HTTPException(404, f"Channel {channel_id!r} not found")
-    start_dt = datetime.fromtimestamp(start)
-    end_dt = datetime.fromtimestamp(end)
-    return idx.get_intervals(start_dt, end_dt)
+    return idx.get_intervals(datetime.fromtimestamp(start), datetime.fromtimestamp(end))
 
 
 @app.get("/api/playlist/{channel_id}")
@@ -137,19 +172,17 @@ async def get_playlist(
 ) -> list[dict]:
     channel = channels_map.get(channel_id)
     if channel is None:
-        raise HTTPException(404, f"Channel {channel_id!r} not found")
+        raise HTTPException(404)
     start_dt = datetime.fromtimestamp(start)
     end_dt = datetime.fromtimestamp(end)
-
     entries = []
     for pl_id in channel.playlists:
         pl_cfg = playlists_map.get(pl_id)
         if pl_cfg is None:
             continue
-        pl_entries = get_entries(pl_cfg, start_dt, end_dt)
-        cl_colors = pl_cfg.class_colors
-        cl_names = pl_cfg.class_names
-        for e in pl_entries:
+        for e in get_entries(pl_cfg, start_dt, end_dt):
+            cl_colors = pl_cfg.class_colors
+            cl_names = pl_cfg.class_names
             entries.append({
                 "timestamp": e.timestamp.timestamp(),
                 "title": e.title,
@@ -158,14 +191,12 @@ async def get_playlist(
                 "color": cl_colors.get(e.cls, cl_colors.get("default", "#e0e0e0")),
                 "cls_name": cl_names.get(e.cls, e.cls),
             })
-
     entries.sort(key=lambda x: x["timestamp"])
     return entries
 
 
 @app.get("/api/playlist_config/{channel_id}")
 async def get_playlist_config(channel_id: str) -> dict:
-    """Return class colors/names for UI legend."""
     channel = channels_map.get(channel_id)
     if channel is None:
         raise HTTPException(404)
@@ -179,6 +210,10 @@ async def get_playlist_config(channel_id: str) -> dict:
     return {"class_colors": colors, "class_names": names}
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# REST API — audio
+# ──────────────────────────────────────────────────────────────────────────────
+
 @app.get("/api/audio/stream")
 async def audio_stream(
     channel: str = Query(...),
@@ -186,18 +221,18 @@ async def audio_stream(
     end: float = Query(...),
     format: str = Query("mp3"),
     bitrate: str = Query("192k"),
+    sample_rate: int = Query(None),
 ):
     channel_cfg = channels_map.get(channel)
     if channel_cfg is None:
         raise HTTPException(404)
     start_dt = datetime.fromtimestamp(start)
     end_dt = datetime.fromtimestamp(end)
-
     media_types = {"mp3": "audio/mpeg", "wav": "audio/wav", "aac": "audio/aac"}
     media_type = media_types.get(format, "audio/mpeg")
 
     async def gen():
-        async for chunk in stream_audio(channel_cfg, start_dt, end_dt, format, bitrate):
+        async for chunk in stream_audio(channel_cfg, start_dt, end_dt, format, bitrate, sample_rate):
             yield chunk
 
     return StreamingResponse(gen(), media_type=media_type)
@@ -222,16 +257,15 @@ async def audio_export(body: dict) -> dict:
     end_dt = datetime.fromtimestamp(end)
     ts = start_dt.strftime("%Y%m%d_%H%M%S")
     fname = f"{channel_id}_{ts}.{fmt}"
-    out_path = str(Path(tempfile.gettempdir()) / fname)
+    out_path = str(EXPORT_DIR / fname)
 
     await export_audio(channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path)
-
     return {"filename": fname, "download_url": f"/api/audio/download/{fname}"}
 
 
 @app.get("/api/audio/download/{filename}")
 async def audio_download(filename: str) -> FileResponse:
-    path = Path(tempfile.gettempdir()) / filename
+    path = EXPORT_DIR / filename
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(str(path), filename=filename, media_type="application/octet-stream")
@@ -247,7 +281,6 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     ws_clients.add(ws)
     try:
         while True:
-            # Keep-alive ping
             await asyncio.sleep(30)
             await ws.send_text(json.dumps({"type": "ping"}))
     except WebSocketDisconnect:

@@ -15,12 +15,12 @@ CONFIG_DIR = Path(__file__).parent.parent / "config"
 
 
 def _resolve_password(raw: dict) -> str | None:
-    """Resolve password from env var or plaintext."""
+    """Resolve password: env var → plaintext field → None."""
     if env_key := raw.get("password_env"):
         val = os.environ.get(env_key)
-        if val is None:
-            print(f"[config] Warning: env var {env_key!r} is not set")
-        return val
+        if val is not None:
+            return val
+        print(f"[config] Info: env var {env_key!r} not set, trying plaintext 'password' field")
     return raw.get("password")
 
 
