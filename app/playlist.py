@@ -17,20 +17,27 @@ log = get_logger("playlist")
 CACHE_DIR = Path(__file__).parent.parent / "cache_playlogs"
 CACHE_DIR.mkdir(exist_ok=True)
 
+# In-memory TTL cache for today's entries (avoids repeated SMB reads on scroll)
+_mem_cache: dict[tuple[str, date], tuple[datetime, list]] = {}
+MEM_CACHE_TTL = 300  # seconds — re-read from source after 5 minutes
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def invalidate_recent(playlist_id: str, days: int = 2) -> None:
-    """Delete cache files for the last N days so they get re-fetched from source."""
+    """Delete disk cache files and memory cache for the last N days."""
     pl_dir = CACHE_DIR / playlist_id
-    if not pl_dir.exists():
-        return
     today = datetime.now().date()
     for i in range(days):
-        p = _cache_path(playlist_id, today - timedelta(days=i))
-        if p.exists():
-            p.unlink()
-            log.debug("Playlog cache invalidated: %s %s", playlist_id, p.stem)
+        d = today - timedelta(days=i)
+        # Disk cache
+        if pl_dir.exists():
+            p = _cache_path(playlist_id, d)
+            if p.exists():
+                p.unlink()
+                log.debug("Playlog disk cache invalidated: %s %s", playlist_id, p.stem)
+        # Memory cache
+        _mem_cache.pop((playlist_id, d), None)
 
 
 def check_sources(config: PlaylistConfig, d: date) -> list[dict]:
@@ -67,17 +74,27 @@ def get_entries(
 
 def _get_date(config: PlaylistConfig, d: date) -> list[PlaylistEntry]:
     today = datetime.now().date()
-    cacheable = d < today  # today's file may still be growing
+    cacheable = d < today  # past dates → permanent disk cache
 
     if cacheable:
         cached = _cache_load(config.id, d)
         if cached is not None:
             return cached
+    else:
+        # Today: short in-memory TTL cache so repeated scroll doesn't hit SMB
+        key = (config.id, d)
+        if key in _mem_cache:
+            fetched_at, mem_entries = _mem_cache[key]
+            if (datetime.now() - fetched_at).total_seconds() < MEM_CACHE_TTL:
+                return mem_entries
 
     entries = _load_with_fallback(config, d)
 
     if cacheable and entries:
         _cache_save(config.id, d, entries)
+    elif not cacheable:
+        # Store even empty result so we don't spam SMB while file doesn't exist yet
+        _mem_cache[(config.id, d)] = (datetime.now(), entries)
 
     return entries
 
