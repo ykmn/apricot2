@@ -488,20 +488,35 @@ function renderLogList() {
 }
 
 // ── Export modal ───────────────────────────────────────────────────────────
+function _getChannelById(id) {
+  for (const st of stations) {
+    const ch = st.channels.find(c => c.id === id);
+    if (ch) return ch;
+  }
+  return null;
+}
+
 function initExportModal() {
   document.getElementById('exp-cancel').addEventListener('click', () => {
     document.getElementById('export-modal').classList.add('hidden');
   });
   document.getElementById('exp-ok').addEventListener('click', doExport);
-
-  // Toggle bitrate row visibility: hidden for WAV (PCM has no bitrate)
   document.getElementById('exp-format').addEventListener('change', _updateExportFields);
 }
 
 function _updateExportFields() {
-  const fmt = document.getElementById('exp-format').value;
+  const fmt        = document.getElementById('exp-format').value;
   const bitrateRow = document.getElementById('exp-bitrate-row');
   const wavNote    = document.getElementById('exp-wav-note');
+  const copyNote   = document.getElementById('exp-copy-note');
+  const srSel      = document.getElementById('exp-samplerate');
+  const brSel      = document.getElementById('exp-bitrate');
+
+  const ch = exportTarget ? _getChannelById(exportTarget.channel_id) : null;
+  const nativeExt = ch ? ch.file_extension.toLowerCase() : null;
+  const isCopy    = nativeExt && fmt === nativeExt;
+
+  // Show/hide bitrate row
   if (fmt === 'wav') {
     bitrateRow.classList.add('hidden');
     wavNote.classList.remove('hidden');
@@ -509,26 +524,68 @@ function _updateExportFields() {
     bitrateRow.classList.remove('hidden');
     wavNote.classList.add('hidden');
   }
+
+  // Show copy-mode note and grey out params when native format selected
+  copyNote.classList.toggle('hidden', !isCopy);
+  srSel.disabled = isCopy;
+  brSel.disabled = isCopy;
+
+  // Always keep native sample_rate selected when changing format
+  if (ch && ch.sample_rate) {
+    const opt = [...srSel.options].find(o => parseInt(o.value) === ch.sample_rate);
+    if (opt) srSel.value = opt.value;
+  }
 }
 
 function openExportModal(item) {
   exportTarget = item;
   document.getElementById('export-progress').classList.add('hidden');
+
+  // Pre-select native channel format
+  const ch = _getChannelById(item.channel_id);
+  if (ch) {
+    const fmtSel = document.getElementById('exp-format');
+    const ext = ch.file_extension.toLowerCase();
+    // Map extension to select option value
+    const fmtMap = { mp3: 'mp3', wav: 'wav', aac: 'aac' };
+    if (fmtMap[ext]) fmtSel.value = fmtMap[ext];
+
+    // Pre-fill samplerate with channel's native rate
+    const srSel = document.getElementById('exp-samplerate');
+    const srOpt = [...srSel.options].find(o => parseInt(o.value) === ch.sample_rate);
+    if (srOpt) srSel.value = srOpt.value;
+
+    // Pre-fill bitrate with channel's detected bitrate (mp3/aac)
+    if (ch.bitrate) {
+      const brSel = document.getElementById('exp-bitrate');
+      const brOpt = [...brSel.options].find(o => o.value === ch.bitrate);
+      if (brOpt) brSel.value = brOpt.value;
+    }
+  }
+
   _updateExportFields();
   document.getElementById('export-modal').classList.remove('hidden');
+}
+
+function _isCopyMode(item) {
+  const ch  = _getChannelById(item.channel_id);
+  const fmt = document.getElementById('exp-format').value;
+  return !!(ch && ch.file_extension.toLowerCase() === fmt);
 }
 
 function _buildExportBody(item) {
   const fmt        = document.getElementById('exp-format').value;
   const bitrate    = document.getElementById('exp-bitrate').value;
   const samplerate = parseInt(document.getElementById('exp-samplerate').value, 10);
+  const copyMode   = _isCopyMode(item);
   return {
     channel_id:  item.channel_id,
     start:       item.start,
     end:         item.end,
     format:      fmt,
-    bitrate:     fmt === 'wav' ? null : bitrate,
-    sample_rate: samplerate,
+    bitrate:     (fmt === 'wav' || copyMode) ? null : bitrate,
+    sample_rate: copyMode ? null : samplerate,
+    copy_mode:   copyMode,
   };
 }
 

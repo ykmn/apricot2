@@ -33,6 +33,14 @@ def set_ffmpeg_path(path: str) -> None:
     FFMPEG = path
 
 
+def _native_format(channel: ChannelConfig) -> str:
+    """Return the container format string ffmpeg expects for channel's native ext."""
+    ext = channel.file_extension.lower()
+    if ext == "wav":  return "wav"
+    if ext == "aac":  return "adts"
+    return "mp3"
+
+
 async def stream_audio(
     channel: ChannelConfig,
     start: datetime,
@@ -40,10 +48,13 @@ async def stream_audio(
     out_format: str = "mp3",
     bitrate: str = "192k",
     sample_rate: int | None = None,
+    copy_mode: bool = False,
 ) -> AsyncGenerator[bytes, None]:
     """
     Yield audio bytes for the requested time range in the requested format.
     Uses ffmpeg to convert/concatenate source files.
+    copy_mode=True streams without re-encoding (only valid when out_format
+    matches the channel's native format).
     """
     idx = file_index.get_index(channel.id)
     if idx is None:
@@ -67,7 +78,6 @@ async def stream_audio(
 
         # Calculate trim offsets
         first_file = files[0]
-        last_file = files[-1]
         ss = max(0.0, (start - first_file.start_dt).total_seconds())
         to = (end - first_file.start_dt).total_seconds()  # relative to first file start
 
@@ -82,15 +92,19 @@ async def stream_audio(
             "-vn",
         ]
 
-        if sample_rate:
-            cmd += ["-ar", str(sample_rate)]
-
-        if out_format == "wav":
-            cmd += ["-acodec", "pcm_s16le", "-f", "wav"]
-        elif out_format == "aac":
-            cmd += ["-acodec", "aac", "-b:a", bitrate, "-f", "adts"]
-        else:  # mp3
-            cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
+        if copy_mode:
+            # Stream-copy: no transcoding, preserve original codec and quality
+            fmt = _native_format(channel)
+            cmd += ["-c", "copy", "-f", fmt]
+        else:
+            if sample_rate:
+                cmd += ["-ar", str(sample_rate)]
+            if out_format == "wav":
+                cmd += ["-acodec", "pcm_s16le", "-f", "wav"]
+            elif out_format == "aac":
+                cmd += ["-acodec", "aac", "-b:a", bitrate, "-f", "adts"]
+            else:  # mp3
+                cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
 
         cmd += ["pipe:1"]
 
@@ -120,6 +134,7 @@ async def export_audio(
     bitrate: str = "192k",
     sample_rate: int | None = None,
     out_path: str | None = None,
+    copy_mode: bool = False,
 ) -> str:
     """Export audio segment to a file. Returns the output file path."""
     if out_path is None:
@@ -128,7 +143,9 @@ async def export_audio(
         out_path = str(Path(tempfile.gettempdir()) / fname)
 
     with open(out_path, "wb") as fout:
-        async for chunk in stream_audio(channel, start, end, out_format, bitrate, sample_rate):
+        async for chunk in stream_audio(
+            channel, start, end, out_format, bitrate, sample_rate, copy_mode
+        ):
             fout.write(chunk)
 
     return out_path

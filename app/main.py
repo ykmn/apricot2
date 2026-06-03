@@ -22,7 +22,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "0.1.005"
+VERSION = "0.1.006"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -349,6 +349,8 @@ async def get_stations() -> list[dict]:
                     "id":             ch.id,
                     "name":           ch.name,
                     "file_extension": ch.file_extension,
+                    "sample_rate":    ch.sample_rate,
+                    "bitrate":        ch.bitrate,
                     "playlists":      ch.playlists,
                     "local_path":     ch.local_path,
                     "smb": {
@@ -464,6 +466,7 @@ async def audio_export(body: dict) -> dict:
     fmt         = body.get("format", "mp3")
     bitrate     = body.get("bitrate") or "192k"
     sample_rate = body.get("sample_rate")
+    copy_mode   = bool(body.get("copy_mode", False))
     if sample_rate is not None:
         sample_rate = int(sample_rate)
 
@@ -478,13 +481,17 @@ async def audio_export(body: dict) -> dict:
     out_path = str(EXPORT_DIR / fname)
 
     log.info(
-        "Export %s  %s → %s  fmt=%s br=%s → %s",
+        "Export %s  %s → %s  fmt=%s%s → %s",
         channel_id, start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-        end_dt.strftime("%H:%M:%S"), fmt, bitrate, fname,
+        end_dt.strftime("%H:%M:%S"), fmt,
+        " [copy]" if copy_mode else f" br={bitrate}",
+        fname,
     )
 
     try:
-        await export_audio(channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path)
+        await export_audio(
+            channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path, copy_mode
+        )
     except Exception as exc:
         log.error("Export failed for %s: %s", channel_id, exc)
         raise HTTPException(500, str(exc))
