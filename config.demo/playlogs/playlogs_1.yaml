@@ -1,13 +1,13 @@
 # Retro FM — плейлог с приоритетным фоллбэком
 # Если в источнике с priority: 1 нет данных на нужную дату,
 # автоматически используется следующий по приоритету источник.
-id: retrofm_plog
+id: retrofm
 name: "Retro FM — Плейлог"
 
 sources:
   # Вариант 1: локальный путь (смонтированная папка или локальный диск)
   - priority: 1
-    local_path: "D:/playlogs/retro-air-1"   # основная эфирная машина
+    local_path: "D:/air-1/playlogs"          # основная эфирная машина, локальная папка
     file_mask: "%Y-%m-%d.log"
     encoding: "windows-1251"
     delimiter: ","
@@ -16,7 +16,7 @@ sources:
   # Вариант 2: SMB (прямое подключение к сетевой шаре)
   - priority: 2
     smb:
-      host: "retro-air-2.domain.local"       # имя или IP резервной машины
+      host: "air-2.domain.local"             # имя или IP резервной машины
       share: "playlogs"                      # имя сетевой шары
       path: ""                               # подпапка внутри шары (пусто = корень)
       secret: 1                              # ссылка на запись в config/secret.yaml

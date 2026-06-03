@@ -9,15 +9,17 @@ env/
 
 # Secrets — никогда не коммитим
 .env
-.secrets.yaml
+.secret.yaml
 config/secret.yaml
 
 # Рабочий конфиг — машино-специфичен, в репо только config.demo/
 config/
-config/secret.yaml
 
-# Временные аудиофайлы экспорта
-/tmp/
+# Автодетектированные параметры аудио (перезаписываются при сканировании)
+config/detected_params.yaml
+
+# Логи
+logs/
 
 # OS
 .DS_Store
@@ -35,9 +37,8 @@ preview*.png
 export/*
 !export/.gitkeep
 
-# Дисковый кэш индекса (machine-specific, regenerated on startup)
-cache/*
-!cache/.gitkeep
-
-# Автодетектированные параметры аудио (перезаписываются при сканировании)
-config/detected_params.yaml
+# Дисковый кэш индексов (machine-specific, regenerated on startup)
+cache_audio/*
+cache_playlogs/*
+!cache_audio/.gitkeep
+!cache_playlogs/.gitkeep

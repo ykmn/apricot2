@@ -8,21 +8,23 @@ channels:
     name: "Retro FM — PGM-HQ (wav/44.1kHz)"
     # Use local_path if the share is already mounted:
     # local_path: "/mnt/retro_fm_pgm"       # Linux/Mac
-    # local_path: "Z:\\retro_fm_pgm"         # Windows
+    # local_path: "Z:\\retro_fm_pgm"        # Windows
     smb:
       host: "fileserver.domain.local"
       share: "retro_fm"
       path: "PGM-HQ"                        # subfolder inside share (optional)
-      username: "svc_radio"
-      password: "secret"                    # plaintext (временно); или:
-      # password_env: "RETRO_FM_PASSWORD"   # из переменной окружения (безопаснее)
-      domain: "CORP"                        # Windows domain (optional)
+      secret: 1                             # номер логина-пароля из secret.yaml
+# или указать явно:
+#      username: "svc_radio"
+#      password: "secret"                   # plaintext
+      # password_env: "RETRO_FM_PASSWORD"   # или из переменной окружения (безопаснее)
+#      domain: "CORP"                       # Windows domain (optional)
     folder_format: "%Y-%m-%d"               # e.g. 2026-06-02
     file_format: "%H-%M-%S"                 # e.g. 18-24-06
     file_extension: "wav"
     sample_rate: 44100
     playlogs:
-      - retro_fm_plog
+      - retro_fm
 
   - id: retro_fm_yamal
     name: "Retro FM — Yamal402 (mp3/64k)"
@@ -30,13 +32,11 @@ channels:
       host: "fileserver2.domain.local"
       share: "retro_fm_yamal"
       path: ""
-      username: "svc_radio"
-      password_env: "RETRO_FM_PASSWORD"
-      domain: "CORP"
+      secret: 1                             # номер логина-пароля из secret.yaml
     folder_format: "%Y-%m-%d"
     file_format: "%H-%M-%S"
     file_extension: "mp3"
     sample_rate: 44100
-    bitrate: "64k"
+    bitrate: "64k"                          # важно: без этого длительность считается неверно
     playlogs:
-      - retro_fm_plog
+      - retro_fm
