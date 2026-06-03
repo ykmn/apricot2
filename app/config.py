@@ -72,7 +72,7 @@ def _parse_channel(raw: dict) -> ChannelConfig:
         bitrate=raw.get("bitrate"),
         local_path=raw.get("local_path"),
         smb=_parse_smb(raw.get("smb")),
-        playlists=raw.get("playlists", []),
+        playlogs=raw.get("playlogs", []),
     )
 
 

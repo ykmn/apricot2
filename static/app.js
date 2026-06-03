@@ -1129,7 +1129,7 @@ function initHamburgerMenu() {
       await loadStations();
       buildChannelDropdown();
       _setStatus('ready', '✓',
-        `Конфигурация обновлена · ${res.stations} ст. · ${res.channels} кан. · ${res.playlists} плейл.`);
+        `Конфигурация обновлена · ${res.stations} ст. · ${res.channels} кан. · ${res.playlogs} плейл.`);
     } catch (e) {
       _setStatus('error', '⚠', `Ошибка обновления конфигурации: ${e.message}`);
     }

@@ -26,7 +26,7 @@ class ChannelConfig:
     bitrate: Optional[str] = None
     local_path: Optional[str] = None
     smb: Optional[SMBConfig] = None
-    playlists: list[str] = field(default_factory=list)
+    playlogs: list[str] = field(default_factory=list)
 
 
 @dataclass

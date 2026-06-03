@@ -5,14 +5,25 @@ id: retrofm_plog
 name: "Retro FM — Плейлог"
 
 sources:
+  # Вариант 1: локальный путь (смонтированная папка или локальный диск)
   - priority: 1
     local_path: "D:/playlogs/retro-air-1"   # основная эфирная машина
     file_mask: "%Y-%m-%d.log"
     encoding: "windows-1251"
     delimiter: ","
-    header_skip_prefix: "FIELD LIST"         # первый столбец строки-заголовка
+    header_skip_prefix: "FIELD LIST"         # первый столбец строки-заголовка (пропустить)
+
+  # Вариант 2: SMB (прямое подключение к сетевой шаре)
   - priority: 2
-    local_path: "D:/playlogs/retro-air-2"   # резервная эфирная машина
+    smb:
+      host: "retro-air-2.domain.local"       # имя или IP резервной машины
+      share: "playlogs"                      # имя сетевой шары
+      path: ""                               # подпапка внутри шары (пусто = корень)
+      secret: 1                              # ссылка на запись в config/secret.yaml
+      # Или явно:
+      # username: "svc_radio"
+      # password: "secret"
+      # domain: "CORP"
     file_mask: "%Y-%m-%d.log"
     encoding: "windows-1251"
     delimiter: ","

@@ -15,7 +15,7 @@ channels:
     file_format: "%H-%M-%S"
     file_extension: "wav"
     sample_rate: 48000
-    playlists:
+    playlogs:
       - europa_plus_plog
 
   - id: europa_pgm_lq
@@ -32,5 +32,5 @@ channels:
     file_extension: "mp3"
     bitrate: "64k"        # важно: без этого длительность считается неверно
     sample_rate: 44100
-    playlists:
+    playlogs:
       - europa_plus_plog

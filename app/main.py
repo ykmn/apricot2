@@ -24,7 +24,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "0.1.009"
+VERSION = "0.1.010"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -275,7 +275,7 @@ async def reload_config() -> dict:
         "ok":       True,
         "stations": len(stations_map),
         "channels": len(channels_map),
-        "playlists": len(playlists_map),
+        "playlogs": len(playlists_map),
     }
 
 
@@ -353,7 +353,7 @@ async def get_stations() -> list[dict]:
                     "file_extension": ch.file_extension,
                     "sample_rate":    ch.sample_rate,
                     "bitrate":        ch.bitrate,
-                    "playlists":      ch.playlists,
+                    "playlogs":       ch.playlogs,
                     "local_path":     ch.local_path,
                     "smb": {
                         "host":  ch.smb.host,
@@ -392,7 +392,7 @@ async def get_playlist(
     start_dt = datetime.fromtimestamp(start)
     end_dt   = datetime.fromtimestamp(end)
     entries  = []
-    for pl_id in channel.playlists:
+    for pl_id in channel.playlogs:
         pl_cfg = playlists_map.get(pl_id)
         if pl_cfg is None:
             continue
@@ -419,7 +419,7 @@ async def get_playlist_config(channel_id: str) -> dict:
         raise HTTPException(404)
     colors: dict = {}
     names:  dict = {}
-    for pl_id in channel.playlists:
+    for pl_id in channel.playlogs:
         pl_cfg = playlists_map.get(pl_id)
         if pl_cfg:
             colors.update(pl_cfg.class_colors)

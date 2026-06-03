@@ -21,7 +21,7 @@ channels:
     file_format: "%H-%M-%S"                 # e.g. 18-24-06
     file_extension: "wav"
     sample_rate: 44100
-    playlists:
+    playlogs:
       - retro_fm_plog
 
   - id: retro_fm_yamal
@@ -38,5 +38,5 @@ channels:
     file_extension: "mp3"
     sample_rate: 44100
     bitrate: "64k"
-    playlists:
+    playlogs:
       - retro_fm_plog
