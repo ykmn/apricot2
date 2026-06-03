@@ -1,6 +1,6 @@
 """
-Disk cache for the file index.
-Each channel is stored as cache/<channel_id>.json for fast startup.
+Disk cache for the audio file index.
+Each channel is stored as cache_audio/<channel_id>.json for fast startup.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .models import AudioFile
 
 log = get_logger("cache")
 
-CACHE_DIR = Path(__file__).parent.parent / "cache"
+CACHE_DIR = Path(__file__).parent.parent / "cache_audio"
 CACHE_DIR.mkdir(exist_ok=True)
 
 

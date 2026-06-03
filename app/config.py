@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 
 from .models import (
-    ChannelConfig, PlaylistConfig, SMBConfig, StationConfig,
+    ChannelConfig, PlaylistConfig, PlaylistSource, SMBConfig, StationConfig,
 )
 
 CONFIG_DIR = Path(__file__).parent.parent / "config"
@@ -93,6 +93,18 @@ def load_stations() -> dict[str, StationConfig]:
     return stations
 
 
+def _parse_playlist_source(raw: dict, idx: int) -> PlaylistSource:
+    return PlaylistSource(
+        priority=int(raw.get("priority", idx + 1)),
+        file_mask=raw.get("file_mask", "%Y-%m-%d.log"),
+        encoding=raw.get("encoding", "windows-1251"),
+        delimiter=raw.get("delimiter", ","),
+        header_skip_prefix=raw.get("header_skip_prefix", "FIELD LIST"),
+        local_path=raw.get("local_path"),
+        smb=_parse_smb(raw.get("smb")),
+    )
+
+
 def load_playlists() -> dict[str, PlaylistConfig]:
     playlists: dict[str, PlaylistConfig] = {}
     pl_dir = CONFIG_DIR / "playlogs"
@@ -101,17 +113,18 @@ def load_playlists() -> dict[str, PlaylistConfig]:
     for f in sorted(pl_dir.glob("*.yaml")):
         with f.open(encoding="utf-8") as fh:
             raw: dict[str, Any] = yaml.safe_load(fh)
+        sources = [
+            _parse_playlist_source(s, i)
+            for i, s in enumerate(raw.get("sources", []))
+        ]
+        sources.sort(key=lambda s: s.priority)
         pl = PlaylistConfig(
             id=raw["id"],
             name=raw["name"],
-            file_mask=raw.get("file_mask", "%Y-%m-%d.csv"),
-            encoding=raw.get("encoding", "utf-8-sig"),
-            delimiter=raw.get("delimiter", ";"),
+            sources=sources,
             fields=raw.get("fields", {}),
             class_colors=raw.get("class_colors", {}),
             class_names=raw.get("class_names", {}),
-            local_path=raw.get("local_path"),
-            smb=_parse_smb(raw.get("smb")),
         )
         playlists[pl.id] = pl
     return playlists

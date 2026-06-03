@@ -141,43 +141,63 @@ bitrate: "64k"    # 32k, 64k, 128k, 192k, 320k
 
 ---
 
-### Плейлог (CSV)
+### Плейлог
+
+Каждый файл конфигурации описывает **один плейлог-источник** с одним или несколькими источниками данных и приоритетами между ними. Если на нужную дату нет данных в источнике с `priority: 1`, автоматически используется `priority: 2` и т.д.
 
 ```yaml
 # config/playlogs/retro_fm.yaml
 id: retrofm_plog
 name: "Retro FM — Плейлог"
 
-smb:
-  host: "playout.domain.local"
-  share: "logs"
-  path: "retro_fm/playlogs"
-  secret: 2                         # другой аккаунт из secret.yaml
+sources:
+  - priority: 1
+    local_path: "/mnt/retro-air-1/playlogs"   # основная эфирная машина
+    file_mask: "%Y-%m-%d.log"
+    encoding: "windows-1251"
+    delimiter: ","
+    header_skip_prefix: "FIELD LIST"           # первый столбец строки-заголовка (пропустить)
+  - priority: 2
+    smb:                                       # резервная машина через SMB
+      host: "retro-air-2.domain.local"
+      share: "playlogs"
+      secret: 2
+    file_mask: "%Y-%m-%d.log"
+    encoding: "windows-1251"
+    delimiter: ","
+    header_skip_prefix: "FIELD LIST"
 
-file_mask: "%Y-%m-%d.csv"           # имя файла по дате
-encoding: "utf-8-sig"
-delimiter: ";"
-
+# Маппинг полей файла → внутренние поля
 fields:
-  date:     "AirDate"               # колонка с датой (или пусто)
-  time:     "AirTime"               # HH:MM:SS
-  title:    "ElementTitle"          # название трека/элемента
-  cls:      "ElementClass"          # класс: M=музыка, J=джингл, A=реклама, P=передача
-  duration: "DurationSec"           # длительность в секундах (необязательно)
+  datetime:  "EventTime"      # объединённое поле даты и времени
+  title:     "ElemName"       # название трека / элемента
+  artist:    "ElemArtist"     # исполнитель (если пусто — только ElemName)
+  cls:       "ElemClass"      # класс: M/J/C/P/N
+  db_id:     "ElemDbId"       # ID в базе данных → всплывает при наведении
+  id_number: "ElemIdNumber"   # порядковый номер → всплывает при наведении
 
 class_colors:
-  M: "#f48fb1"
-  J: "#90caf9"
-  A: "#ffcc80"
-  P: "#a5d6a7"
-  default: "#e0e0e0"
+  M: "#1565c0"
+  J: "#558b2f"
+  C: "#e65100"
+  P: "#6a1b9a"
+  N: "#37474f"
+  default: "#424242"
 
 class_names:
   M: "Музыка"
   J: "Джингл"
-  A: "Реклама"
+  C: "Реклама"
   P: "Передача"
+  N: "Новости"
 ```
+
+**Формат строки плейлога в UI:**  
+`Исполнитель — Название` (или просто `Название`, если исполнитель не заполнен).  
+При наведении на строку показывается всплывающая подсказка: `[dbID: 70501 // ID_Number: R071-01]`.
+
+**Кэш плейлогов** хранится в `cache_playlogs/{playlist_id}/{YYYY-MM-DD}.json`.  
+Данные прошлых дат кэшируются навсегда; сегодняшний день не кэшируется (файл может дописываться).
 
 ---
 
@@ -326,7 +346,8 @@ radio-monitor/
 ├── config/              # Рабочая конфигурация (не в репо)
 ├── config.demo/         # Демо-конфигурация (в репо)
 ├── export/              # Экспортированные файлы (auto-cleanup)
-└── cache/               # Дисковый кэш индекса (auto-generated)
+├── cache_audio/         # Дисковый кэш индекса аудиофайлов (auto-generated)
+└── cache_playlogs/      # Дисковый кэш плейлогов по датам (auto-generated)
 ```
 
 ### Индекс файлов и кэш

@@ -257,6 +257,7 @@ function renderPlaylist(entries) {
     const title = document.createElement('span');
     title.className = 'pl-title';
     title.textContent = e.title;
+    if (e.elem_id) title.title = e.elem_id;
 
     const addBtn = document.createElement('button');
     addBtn.className = 'pl-add-btn';

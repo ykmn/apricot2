@@ -37,17 +37,24 @@ class StationConfig:
 
 
 @dataclass
+class PlaylistSource:
+    priority: int
+    file_mask: str = "%Y-%m-%d.log"
+    encoding: str = "windows-1251"
+    delimiter: str = ","
+    header_skip_prefix: str = "FIELD LIST"  # first cell of header row to skip
+    local_path: Optional[str] = None
+    smb: Optional[SMBConfig] = None
+
+
+@dataclass
 class PlaylistConfig:
     id: str
     name: str
-    file_mask: str = "%Y-%m-%d.csv"
-    encoding: str = "utf-8-sig"
-    delimiter: str = ";"
+    sources: list = field(default_factory=list)   # list[PlaylistSource] sorted by priority
     fields: dict = field(default_factory=dict)
     class_colors: dict = field(default_factory=dict)
     class_names: dict = field(default_factory=dict)
-    local_path: Optional[str] = None
-    smb: Optional[SMBConfig] = None
 
 
 @dataclass
@@ -67,6 +74,7 @@ class PlaylistEntry:
     title: str
     cls: str
     duration: Optional[float] = None
+    elem_id: str = ""
 
 
 @dataclass

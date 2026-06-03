@@ -1,0 +1,44 @@
+# Retro FM — плейлог с приоритетным фоллбэком
+# Если в источнике с priority: 1 нет данных на нужную дату,
+# автоматически используется следующий по приоритету источник.
+id: retrofm_plog
+name: "Retro FM — Плейлог"
+
+sources:
+  - priority: 1
+    local_path: "D:/playlogs/retro-air-1"   # основная эфирная машина
+    file_mask: "%Y-%m-%d.log"
+    encoding: "windows-1251"
+    delimiter: ","
+    header_skip_prefix: "FIELD LIST"         # первый столбец строки-заголовка
+  - priority: 2
+    local_path: "D:/playlogs/retro-air-2"   # резервная эфирная машина
+    file_mask: "%Y-%m-%d.log"
+    encoding: "windows-1251"
+    delimiter: ","
+    header_skip_prefix: "FIELD LIST"
+
+# Маппинг полей CSV → внутренние поля
+fields:
+  datetime:  "EventTime"      # дата и время (объединённое поле)
+  title:     "ElemName"       # название трека / элемента
+  artist:    "ElemArtist"     # исполнитель (может быть пустым)
+  cls:       "ElemClass"      # класс: M/J/C/P/N
+  db_id:     "ElemDbId"       # ID в базе данных (всплывает при наведении)
+  id_number: "ElemIdNumber"   # порядковый номер элемента
+
+# Цвета классов (CSS hex)
+class_colors:
+  M: "#1565c0"   # музыка — синий
+  J: "#558b2f"   # джингл — зелёный
+  C: "#e65100"   # реклама — оранжевый
+  P: "#6a1b9a"   # передача — фиолетовый
+  N: "#37474f"   # новости — тёмно-серый
+  default: "#424242"
+
+class_names:
+  M: "Музыка"
+  J: "Джингл"
+  C: "Реклама"
+  P: "Передача"
+  N: "Новости"
