@@ -319,7 +319,6 @@ function initTransport() {
       start, end,
       label: '',
     });
-    Timeline.clearSelection();
   });
 
   document.getElementById('btn-now').addEventListener('click', () => {
@@ -543,6 +542,7 @@ function renderLogList() {
       logItems = logItems.filter(i => i.id !== item.id);
       _saveLogItems();
       renderLogList();
+      Timeline.clearSelection();
     });
 
     actions.appendChild(dlBtn);
@@ -677,9 +677,20 @@ async function doExport() {
 }
 
 async function exportAll() {
-  for (const item of logItems) {
-    await doExportItem(item);
+  if (logItems.length === 0) return;
+  const total = logItems.length;
+  const el = document.getElementById('play-loading');
+  let failed = 0;
+  for (let i = 0; i < total; i++) {
+    el.textContent = `⬇ Экспорт ${i + 1} / ${total}…`;
+    el.classList.remove('hidden');
+    const ok = await doExportItem(logItems[i]);
+    if (!ok) failed++;
   }
+  el.textContent = failed
+    ? `⚠ Экспорт: ${total - failed} из ${total} — ошибки: ${failed}`
+    : `✓ Экспорт завершён (${total})`;
+  setTimeout(() => el.classList.add('hidden'), 3000);
 }
 
 async function doExportItem(item) {
@@ -701,8 +712,10 @@ async function doExportItem(item) {
     });
     _triggerDownload(result.download_url, result.filename);
     await new Promise(r => setTimeout(r, 500));
+    return true;
   } catch (e) {
     console.error('Export failed for', item, e);
+    return false;
   }
 }
 
