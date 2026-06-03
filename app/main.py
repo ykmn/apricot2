@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
+from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +24,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "0.1.006"
+VERSION = "0.1.007"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -476,9 +478,12 @@ async def audio_export(body: dict) -> dict:
 
     start_dt = datetime.fromtimestamp(start)
     end_dt   = datetime.fromtimestamp(end)
-    ts       = start_dt.strftime("%Y%m%d_%H%M%S")
-    fname    = f"{channel_id}_{ts}.{fmt}"
-    out_path = str(EXPORT_DIR / fname)
+    safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', ' ', channel_cfg.name)
+    safe_name = ' '.join(safe_name.split())
+    date_str  = start_dt.strftime("%Y-%m-%d")
+    time_str  = start_dt.strftime("%H-%M-%S")
+    fname     = f"{safe_name} {date_str} {time_str}.{fmt}"
+    out_path  = str(EXPORT_DIR / fname)
 
     log.info(
         "Export %s  %s → %s  fmt=%s%s → %s",
@@ -496,7 +501,7 @@ async def audio_export(body: dict) -> dict:
         log.error("Export failed for %s: %s", channel_id, exc)
         raise HTTPException(500, str(exc))
 
-    return {"filename": fname, "download_url": f"/api/audio/download/{fname}"}
+    return {"filename": fname, "download_url": f"/api/audio/download/{quote(fname)}"}
 
 
 @app.get("/api/audio/download/{filename}")

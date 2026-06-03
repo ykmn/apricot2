@@ -20,7 +20,7 @@
       <div id="channel-input-row">
         <input id="channel-search" type="text" placeholder="Фильтр…" autocomplete="off">
         <button id="channel-list-btn" title="Открыть список каналов">▾</button>
-        <button id="channel-copy-btn" title="Скопировать путь к папке">📋</button>
+        <button id="channel-copy-btn" title="Скопировать путь к папке">📃</button>
       </div>
       <div id="channel-dropdown" class="dropdown hidden"></div>
     </div>
@@ -44,10 +44,9 @@
         <button id="btn-hamburger" title="Меню">☰</button>
         <div id="hamburger-menu" class="hidden">
           <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
+          <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
           <div class="menu-sep"></div>
           <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
-          <div class="menu-sep"></div>
-          <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
           <div class="menu-sep"></div>
           <button class="menu-item" id="menu-restart">🔁 Перезапустить сервер</button>
           <div class="menu-sep"></div>
@@ -86,6 +85,7 @@
     <span id="status-icon">⏳</span>
     <span id="status-text">Инициализация…</span>
     <span id="status-detail"></span>
+    <span id="play-loading" class="hidden">⌛ Буферизация…</span>
     <span id="status-close" title="Скрыть">✕</span>
   </div>
 

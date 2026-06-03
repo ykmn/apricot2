@@ -10,6 +10,10 @@ let isPlaying       = false;
 let playStartTime   = null;    // real Date.now() when playback started
 let playFromTs      = null;    // timeline ts when playback started
 let playAnimFrame   = null;
+let _tlAnimUpdate   = false;   // true only during animation-frame setTime calls
+let _seekPending    = false;   // true while user scrolled and audio hasn't started yet
+
+const _LOG_KEY = 'avocado-logitems';
 
 const audio = document.getElementById('audio-player');
 
@@ -18,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   Timeline.init({
     onTimeChange: ts => {
       refreshPlaylistForVisible();
+      if (isPlaying && !_tlAnimUpdate) _debouncedSeek(ts);
     },
     onSelChange: (s, e) => {
       updateSelLabel(s, e);
@@ -28,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   buildChannelDropdown();
   initChannelSearch();
   initTransport();
+  _loadLogItems();
   initLogList();
   initExportModal();
   initClockControls();
@@ -320,7 +326,23 @@ function initTransport() {
     Timeline.setTime(Date.now() / 1000);
   });
 
-  audio.addEventListener('ended', () => stopPlay());
+  // When audio actually starts outputting sound — sync clock and clear loading
+  audio.addEventListener('playing', () => {
+    if (!isPlaying) return;
+    playStartTime = Date.now();
+    _seekPending  = false;
+    _hidePlayLoading();
+  });
+
+  audio.addEventListener('ended',   () => stopPlay());
+  audio.addEventListener('error',   () => { _seekPending = false; _hidePlayLoading(); });
+}
+
+function _showPlayLoading() {
+  document.getElementById('play-loading').classList.remove('hidden');
+}
+function _hidePlayLoading() {
+  document.getElementById('play-loading').classList.add('hidden');
 }
 
 function togglePlay() {
@@ -335,33 +357,64 @@ function startPlay() {
   const startTs = (selS !== null) ? selS : ts;
   const endTs   = (selE !== null) ? selE : startTs + 3600;
 
+  isPlaying  = true;
+  playFromTs = startTs;
+  _seekPending = true;   // hold animation until audio fires 'playing'
+  document.getElementById('btn-play').textContent = '⏸';
+  _showPlayLoading();
+
   const url = `/api/audio/stream?channel=${currentChannel.id}&start=${startTs}&end=${endTs}&format=mp3&bitrate=192k`;
   audio.src = url;
-  audio.play().then(() => {
-    isPlaying = true;
-    document.getElementById('btn-play').textContent = '⏸';
-    playStartTime = Date.now();
-    playFromTs    = startTs;
-    _startPlayheadAnimation();
-  }).catch(e => console.warn('Playback failed:', e));
+  audio.play().catch(e => { console.warn('Playback failed:', e); stopPlay(); });
+  _startPlayheadAnimation();
 }
 
 function stopPlay() {
   audio.pause();
-  audio.src = '';
-  isPlaying = false;
+  audio.src   = '';
+  isPlaying   = false;
+  _seekPending = false;
   document.getElementById('btn-play').textContent = '▶';
   cancelAnimationFrame(playAnimFrame);
+  _hidePlayLoading();
 }
 
 function _startPlayheadAnimation() {
   function frame() {
     if (!isPlaying) return;
-    const elapsed = (Date.now() - playStartTime) / 1000;
-    Timeline.setTime(playFromTs + elapsed);
+    if (!_seekPending) {
+      // Don't advance while user is scrolling or audio is buffering
+      const elapsed = (Date.now() - playStartTime) / 1000;
+      _tlAnimUpdate = true;
+      Timeline.setTime(playFromTs + elapsed);
+      _tlAnimUpdate = false;
+    }
     playAnimFrame = requestAnimationFrame(frame);
   }
   playAnimFrame = requestAnimationFrame(frame);
+}
+
+let _seekTimer = null;
+function _debouncedSeek(ts) {
+  // Immediately freeze animation so the user sees their scroll position
+  _seekPending = true;
+  clearTimeout(_seekTimer);
+  _seekTimer = setTimeout(() => _seekPlayback(ts), 250);
+}
+
+function _seekPlayback(ts) {
+  if (!isPlaying || !currentChannel) { _seekPending = false; return; }
+  playFromTs = ts;
+  _showPlayLoading();
+  const { start: selS, end: selE } = Timeline.getSelection();
+  const endTs = (selE !== null) ? selE : ts + 3600;
+  const url = `/api/audio/stream?channel=${currentChannel.id}&start=${ts}&end=${endTs}&format=mp3&bitrate=192k`;
+  audio.src = url;
+  audio.play().catch(e => {
+    console.warn('Seek failed:', e);
+    _seekPending = false;
+    _hidePlayLoading();
+  });
 }
 
 
@@ -406,10 +459,23 @@ function _secToDuration(s) {
   return `${m}:${_fmt2(sec)}`;
 }
 
+// ── Log-list persistence ───────────────────────────────────────────────────
+function _saveLogItems() {
+  try { localStorage.setItem(_LOG_KEY, JSON.stringify(logItems)); } catch(e) {}
+}
+
+function _loadLogItems() {
+  try {
+    const raw = localStorage.getItem(_LOG_KEY);
+    if (raw) { logItems = JSON.parse(raw); renderLogList(); }
+  } catch(e) {}
+}
+
 // ── Log-list ───────────────────────────────────────────────────────────────
 function initLogList() {
   document.getElementById('btn-clear-log').addEventListener('click', () => {
     logItems = [];
+    _saveLogItems();
     renderLogList();
   });
   document.getElementById('btn-export-all').addEventListener('click', exportAll);
@@ -418,6 +484,7 @@ function initLogList() {
 function addLogItem(item) {
   const id = 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2);
   logItems.push({ id, ...item });
+  _saveLogItems();
   renderLogList();
 }
 
@@ -474,6 +541,7 @@ function renderLogList() {
     delBtn.title = 'Удалить из лог-листа';
     delBtn.addEventListener('click', () => {
       logItems = logItems.filter(i => i.id !== item.id);
+      _saveLogItems();
       renderLogList();
     });
 
