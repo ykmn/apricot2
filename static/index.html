@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Авокадо</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="/static/favicon.svg" sizes="any" type="image/svg+xml">
+
 </head>
 <body>
 <div id="app">
@@ -14,9 +16,13 @@
     <div id="app-brand">🥑 Авокадо</div>
 
     <div id="channel-selector-wrap">
-      <input id="channel-search" type="text" placeholder="Поиск канала…" autocomplete="off">
-      <div id="channel-dropdown" class="dropdown hidden"></div>
       <div id="channel-label">Выберите канал</div>
+      <div id="channel-input-row">
+        <input id="channel-search" type="text" placeholder="Фильтр…" autocomplete="off">
+        <button id="channel-list-btn" title="Открыть список каналов">▾</button>
+        <button id="channel-copy-btn" title="Скопировать путь к папке">📋</button>
+      </div>
+      <div id="channel-dropdown" class="dropdown hidden"></div>
     </div>
 
     <div id="topbar-right">
@@ -40,6 +46,10 @@
           <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
           <div class="menu-sep"></div>
           <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" id="menu-restart">🔁 Перезапустить сервер</button>
           <div class="menu-sep"></div>
           <span class="menu-version" id="menu-ver">v…</span>
         </div>
@@ -71,6 +81,20 @@
     </div>
   </div>
 
+  <!-- ── Index status bar ────────────────────────────────────────────── -->
+  <div id="status-bar" class="status-scanning">
+    <span id="status-icon">⏳</span>
+    <span id="status-text">Инициализация…</span>
+    <span id="status-detail"></span>
+    <span id="status-close" title="Скрыть">✕</span>
+  </div>
+
+  <!-- ── Channel diagnostics popover ──────────────────────────────── -->
+  <div id="diag-popover" class="hidden">
+    <div id="diag-title">Недоступные каналы</div>
+    <div id="diag-list"></div>
+  </div>
+
   <!-- ── Main columns ─────────────────────────────────────────────── -->
   <div id="main-columns">
 
@@ -90,7 +114,6 @@
         <div>
           <button id="btn-export-all" class="btn-green btn-sm">Скачать всё</button>
           <button id="btn-clear-log"  class="btn-danger btn-sm">Очистить</button>
-          <button id="btn-uploads"    class="btn-blue btn-sm">Загрузки</button>
         </div>
       </div>
       <div id="loglist-items" class="scrollable-list"></div>

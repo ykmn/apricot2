@@ -54,6 +54,7 @@ class PlaylistConfig:
 class AudioFile:
     channel_id: str
     path: str          # full path (local or smb UNC)
+    rel_path: str      # relative key used in index, e.g. "2024-06-03/18-00-00.mp3"
     start_dt: datetime
     end_dt: datetime
     duration: float    # seconds

@@ -1,0 +1,36 @@
+id: europa_plus
+name: "Europa Plus"
+
+channels:
+  - id: europa_pgm_hq
+    name: "Europa Plus — PGM-HQ (wav/48kHz)"
+    smb:
+      host: "fileserver.domain.local"
+      share: "europa_plus"
+      path: "PGM-HQ"
+      username: "svc_radio"
+      password_env: "EUROPA_PASSWORD"
+      domain: "CORP"
+    folder_format: "%Y-%m-%d"
+    file_format: "%H-%M-%S"
+    file_extension: "wav"
+    sample_rate: 48000
+    playlists:
+      - europa_plus_plog
+
+  - id: europa_pgm_lq
+    name: "Europa Plus — PGM (mp3/64k)"
+    smb:
+      host: "fileserver.domain.local"
+      share: "europa_plus"
+      path: "PGM-LQ"
+      username: "svc_radio"
+      password_env: "EUROPA_PASSWORD"
+      domain: "CORP"
+    folder_format: "%Y-%m-%d"
+    file_format: "%H-%M-%S"
+    file_extension: "mp3"
+    bitrate: "64k"        # важно: без этого длительность считается неверно
+    sample_rate: 44100
+    playlists:
+      - europa_plus_plog

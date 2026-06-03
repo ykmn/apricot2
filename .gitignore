@@ -10,6 +10,11 @@ env/
 # Secrets — никогда не коммитим
 .env
 .secrets.yaml
+config/secret.yaml
+
+# Рабочий конфиг — машино-специфичен, в репо только config.demo/
+config/
+config/secret.yaml
 
 # Временные аудиофайлы экспорта
 /tmp/
@@ -21,6 +26,7 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+preview*.png
 
 # Claude Code — machine-specific
 .claude/launch.json
@@ -28,3 +34,10 @@ Thumbs.db
 # Экспортированные аудиофайлы
 export/*
 !export/.gitkeep
+
+# Дисковый кэш индекса (machine-specific, regenerated on startup)
+cache/*
+!cache/.gitkeep
+
+# Автодетектированные параметры аудио (перезаписываются при сканировании)
+config/detected_params.yaml

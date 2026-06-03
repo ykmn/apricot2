@@ -13,6 +13,23 @@ from .models import (
 
 CONFIG_DIR = Path(__file__).parent.parent / "config"
 
+# Cached secrets indexed by id
+_secrets: dict[int, dict] | None = None
+
+
+def _load_secrets() -> dict[int, dict]:
+    global _secrets
+    if _secrets is not None:
+        return _secrets
+    secret_path = CONFIG_DIR / "secret.yaml"
+    if not secret_path.exists():
+        _secrets = {}
+        return _secrets
+    with secret_path.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+    _secrets = {entry["id"]: entry for entry in data.get("authorization", [])}
+    return _secrets
+
 
 def _resolve_password(raw: dict) -> str | None:
     """Resolve password: env var → plaintext field → None."""
@@ -27,14 +44,20 @@ def _resolve_password(raw: dict) -> str | None:
 def _parse_smb(raw: dict | None) -> SMBConfig | None:
     if not raw:
         return None
+    creds: dict = {}
+    if secret_id := raw.get("secret"):
+        secrets = _load_secrets()
+        if secret_id not in secrets:
+            raise ValueError(f"[config] secret id={secret_id} not found in config/secret.yaml")
+        creds = secrets[secret_id]
     return SMBConfig(
         host=raw["host"],
         share=raw["share"],
         path=raw.get("path", ""),
-        username=raw.get("username", ""),
-        password=_resolve_password(raw),
+        username=creds.get("username") or raw.get("username", ""),
+        password=creds.get("password") or _resolve_password(raw),
         password_env=raw.get("password_env"),
-        domain=raw.get("domain"),
+        domain=creds.get("domain") or raw.get("domain"),
     )
 
 
@@ -72,7 +95,7 @@ def load_stations() -> dict[str, StationConfig]:
 
 def load_playlists() -> dict[str, PlaylistConfig]:
     playlists: dict[str, PlaylistConfig] = {}
-    pl_dir = CONFIG_DIR / "playlists"
+    pl_dir = CONFIG_DIR / "playlogs"
     if not pl_dir.exists():
         return playlists
     for f in sorted(pl_dir.glob("*.yaml")):

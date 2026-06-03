@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initExportModal();
   initClockControls();
   initHamburgerMenu();
+  initHotkeys();
+  initStatusBar();
   connectWebSocket();
   loadVersion();
 
@@ -102,28 +104,98 @@ function filterChannelDropdown(query) {
 }
 
 function initChannelSearch() {
-  const inp = document.getElementById('channel-search');
-  const dd  = document.getElementById('channel-dropdown');
-  const lbl = document.getElementById('channel-label');
+  const inp  = document.getElementById('channel-search');
+  const btn  = document.getElementById('channel-list-btn');
+  const copy = document.getElementById('channel-copy-btn');
+  const dd   = document.getElementById('channel-dropdown');
 
-  inp.addEventListener('focus', () => {
+  copy.disabled = true;
+  copy.addEventListener('click', async () => {
+    const path = _channelFolderPath(currentChannel || {});
+    if (!path) {
+      alert('Путь к папке недоступен для этого канала.');
+      return;
+    }
+    // Try modern clipboard API, fall back to execCommand
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(path);
+      ok = true;
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = path;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch { ok = false; }
+    }
+    if (ok) {
+      const prev = copy.textContent;
+      copy.textContent = '✓';
+      setTimeout(() => { copy.textContent = prev; }, 1500);
+    } else {
+      prompt('Скопируйте путь вручную:', path);
+    }
+  });
+  let _ddHideTimer = null;
+
+  function _showDropdown(resetFilter) {
+    clearTimeout(_ddHideTimer);
+    if (resetFilter) { inp.value = ''; }
+    filterChannelDropdown(inp.value);
     dd.classList.remove('hidden');
-    inp.select();
+  }
+
+  function _scheduleHide() {
+    _ddHideTimer = setTimeout(() => dd.classList.add('hidden'), 150);
+  }
+
+  // Button: always opens full list
+  btn.addEventListener('mousedown', e => { e.preventDefault(); });
+  btn.addEventListener('click', () => {
+    if (!dd.classList.contains('hidden')) {
+      dd.classList.add('hidden');
+    } else {
+      _showDropdown(true);
+      inp.focus();
+    }
   });
-  inp.addEventListener('blur', () => {
-    setTimeout(() => dd.classList.add('hidden'), 150);
-  });
+
+  // Input: open on focus/click and filter on type
+  inp.addEventListener('focus', () => _showDropdown(false));
+  inp.addEventListener('click', () => _showDropdown(false));
+  inp.addEventListener('blur', _scheduleHide);
+  btn.addEventListener('blur', _scheduleHide);
   inp.addEventListener('input', () => {
     filterChannelDropdown(inp.value);
+    dd.classList.remove('hidden');
   });
+}
+
+function _channelFolderPath(ch) {
+  if (ch.local_path) return ch.local_path;
+  if (ch.smb) {
+    const parts = [ch.smb.host, ch.smb.share];
+    if (ch.smb.path) parts.push(ch.smb.path);
+    return '\\\\' + parts.join('\\');
+  }
+  return '';
 }
 
 function selectChannel(ch, st) {
   currentChannel = ch;
-  const inp = document.getElementById('channel-search');
-  const lbl = document.getElementById('channel-label');
-  inp.value = ch.name;
-  lbl.textContent = '';
+  const inp  = document.getElementById('channel-search');
+  const lbl  = document.getElementById('channel-label');
+  const copy = document.getElementById('channel-copy-btn');
+  inp.value = '';
+  inp.placeholder = 'Фильтр…';
+  lbl.textContent = ch.name;
+  const folderPath = _channelFolderPath(ch);
+  copy.title = folderPath ? `Скопировать путь: ${folderPath}` : 'Путь недоступен';
+  copy.disabled = !folderPath;
 
   // Mark active
   document.querySelectorAll('.dropdown-channel').forEach(el => {
@@ -341,10 +413,6 @@ function initLogList() {
     renderLogList();
   });
   document.getElementById('btn-export-all').addEventListener('click', exportAll);
-  document.getElementById('btn-uploads').addEventListener('click', () => {
-    // Open the temp download folder or show a list — simplified to alert
-    alert('Экспортированные файлы сохраняются во временную папку системы.\nИспользуйте кнопку ↓ рядом с каждой записью для скачивания.');
-  });
 }
 
 function addLogItem(item) {
@@ -569,6 +637,270 @@ function _adjustTime(unit, dir) {
   if (currentChannel) Timeline.setChannel(currentChannel.id);
 }
 
+// ── Hotkeys ────────────────────────────────────────────────────────────────
+// 0        — Play / Pause
+// [        — Mark In (начало выделения)
+// ]        — Mark Out (конец выделения)
+// S        — Фокус на поле выбора канала
+// + / =    — Увеличить единицу времени под курсором на таймлайне
+// -        — Уменьшить единицу времени под курсором на таймлайне
+function initHotkeys() {
+  // Единицы таймлайна → единицы _adjustTime (совпадают)
+  const TIMELINE_UNITS = new Set(['second', 'minute', 'hour', 'day', 'month']);
+
+  document.addEventListener('keydown', e => {
+    // Не перехватывать клавиши, когда фокус в поле ввода или textarea
+    const tag = document.activeElement && document.activeElement.tagName;
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    // S без модификаторов — фокус на поиске канала (работает даже из input)
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey && !isInput) {
+      e.preventDefault();
+      const inp = document.getElementById('channel-search');
+      if (inp) { inp.focus(); inp.select(); }
+      return;
+    }
+
+    if (isInput) return;   // остальные горячие клавиши — только вне полей ввода
+
+    switch (e.key) {
+      case '0':
+        e.preventDefault();
+        togglePlay();
+        break;
+
+      case '[':
+        e.preventDefault();
+        Timeline.setSelStart();
+        break;
+
+      case ']':
+        e.preventDefault();
+        Timeline.setSelEnd();
+        break;
+
+      case '+':
+      case '=': {   // '=' — это '+' без Shift на EN-раскладке
+        e.preventDefault();
+        const unit = Timeline.getHoveredUnit();
+        if (unit && TIMELINE_UNITS.has(unit)) _adjustTime(unit, +1);
+        break;
+      }
+
+      case '-': {
+        e.preventDefault();
+        const unit = Timeline.getHoveredUnit();
+        if (unit && TIMELINE_UNITS.has(unit)) _adjustTime(unit, -1);
+        break;
+      }
+    }
+  });
+}
+
+// ── Index status bar ───────────────────────────────────────────────────────
+let _statusChannels = [];   // [{id, name, files, done, failed, rescanning}]
+
+function initStatusBar() {
+  document.getElementById('status-close').addEventListener('click', () => {
+    document.getElementById('status-bar').classList.add('hidden');
+  });
+
+  // Fetch current state (handles page reload mid-scan or after scan)
+  fetch('/api/index_status')
+    .then(r => r.json())
+    .then(data => _applyIndexStatus(data))
+    .catch(() => _setStatus('error', '⚠', 'Не удалось получить статус индекса'));
+}
+
+function _applyIndexStatus(data) {
+  _statusChannels = data.channels || [];
+  _rebuildDots();
+
+  if (data.status === 'ready' || data.status === 'idle') {
+    const failedN   = _statusChannels.filter(c => c.failed).length;
+    const failedStr = failedN ? ` · ⚠ ${failedN} недоступн.` : '';
+    _setStatus('ready', '✓',
+      `Индекс готов · ${data.total_files} файлов · ${data.total_channels} каналов${failedStr}`);
+    if (failedN) _makeDiagLink();
+  } else if (data.status === 'scanning') {
+    const done  = data.done_channels;
+    const total = data.total_channels;
+    const active = _statusChannels.find(c => !c.done);
+    const label  = active ? ` · ${_displayName(active.name)}` : '';
+    _setStatus('scanning', '⟳', `Обновление (${done}/${total})${label}…`);
+  }
+}
+
+function _handleCacheLoaded(msg) {
+  _setStatus('scanning', '📦',
+    `Кэш загружен · ${msg.total_files} файлов · обновление в фоне…`);
+  // Index just became available from cache — re-fetch without clearing existing data
+  if (currentChannel) Timeline.refreshAvailability();
+}
+
+function _handleIndexScanning(msg) {
+  _statusChannels.forEach(c => { c.rescanning = (c.id === msg.channel_id); });
+  _rebuildDots();
+  _setStatus('scanning', '⟳',
+    `Обновление (${msg.done}/${msg.total}) · ${_displayName(msg.channel_name)}…`);
+}
+
+function _displayName(fullName) {
+  // Normalize em-dash to regular dash for display
+  return fullName.replace(/\s*—\s*/g, ' - ');
+}
+
+function _handleIndexProgress(msg) {
+  const ch = _statusChannels.find(c => c.id === msg.channel_id);
+  if (ch) { ch.files = msg.files; ch.done = true; ch.failed = false; ch.rescanning = false; }
+  _rebuildDots();
+  // If this is the currently selected channel, re-fetch availability without clearing
+  if (currentChannel && currentChannel.id === msg.channel_id) Timeline.refreshAvailability();
+
+  if (msg.rescan && msg.done === 1) {
+    _setStatus('ready', '✓',
+      `Пересканирование завершено · ${_displayName(msg.channel_name)} · ${msg.files} файлов`);
+    if (currentChannel && currentChannel.id === msg.channel_id) {
+      Timeline.setChannel(currentChannel.id);
+    }
+    return;
+  }
+
+  const nextCh = _statusChannels.find(c => !c.done);
+  const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
+  _setStatus('scanning', '⟳',
+    `Обновление (${msg.done}/${msg.total})${label}…`,
+    `готово: ${_displayName(msg.channel_name)} · ${msg.files} файлов`);
+}
+
+function _handleIndexError(msg) {
+  const ch = _statusChannels.find(c => c.id === msg.channel_id);
+  if (ch) { ch.done = true; ch.failed = true; ch.files = 0; ch.rescanning = false; ch.error = msg.error || ''; }
+  _rebuildDots();
+
+  const nextCh = _statusChannels.find(c => !c.done);
+  const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
+  _setStatus('scanning', '⟳',
+    `Обновление (${msg.done}/${msg.total})${label}…`,
+    `⚠ недоступен: ${_displayName(msg.channel_name)}`);
+}
+
+function _handleIndexDone(msg) {
+  _statusChannels.forEach(c => { c.rescanning = false; if (!c.done) c.done = true; });
+  _rebuildDots();
+  // Re-fetch availability now that all scanning is done (without clearing existing data)
+  if (currentChannel) Timeline.refreshAvailability();
+  const failedN   = _statusChannels.filter(c => c.failed).length;
+  const failedStr = failedN ? ` · ⚠ ${failedN} недоступн.` : '';
+  _setStatus('ready', '✓',
+    `Индекс готов · ${msg.total_files} файлов · ${msg.channels} каналов${failedStr}`);
+  if (failedN) _makeDiagLink();
+}
+
+let _statusHideTimer = null;
+
+function _setStatus(cls, icon, text, detail = '') {
+  clearTimeout(_statusHideTimer);
+  const bar = document.getElementById('status-bar');
+  bar.classList.remove('status-scanning', 'status-ready', 'status-error', 'hidden');
+  bar.classList.add(`status-${cls}`);
+  document.getElementById('status-icon').textContent   = icon;
+  document.getElementById('status-text').textContent   = text;
+  document.getElementById('status-detail').textContent = detail;
+  // Auto-clear informational 'ready' messages after 5 seconds (bar stays visible)
+  if (cls === 'ready') {
+    _statusHideTimer = setTimeout(() => {
+      document.getElementById('status-icon').textContent   = '';
+      document.getElementById('status-text').textContent   = '';
+      document.getElementById('status-detail').textContent = '';
+    }, 5000);
+  }
+}
+
+function _rebuildDots() {
+  const old = document.getElementById('status-dots');
+  if (old) old.remove();
+  if (_statusChannels.length === 0) return;
+
+  const bar  = document.getElementById('status-bar');
+  const dots = document.createElement('span');
+  dots.id = 'status-dots';
+  dots.className = 'status-dots';
+
+  _statusChannels.forEach(c => {
+    const dot = document.createElement('span');
+    let cls = 'status-dot';
+    if (c.rescanning)  cls += ' rescanning';
+    else if (c.failed) cls += ' failed';
+    else if (c.done)   cls += ' done';
+    dot.className = cls;
+    dot.title = c.failed     ? `${c.name}: недоступен — нажмите для диагностики`
+              : c.rescanning ? `${c.name}: обновляется…`
+              : `${c.name}: ${c.files} файлов`;
+    if (c.failed) {
+      dot.style.cursor = 'pointer';
+      dot.addEventListener('click', e => { e.stopPropagation(); _showDiagPopover(dot, [c]); });
+    }
+    dots.appendChild(dot);
+  });
+
+  bar.insertBefore(dots, document.getElementById('status-close'));
+}
+
+function _makeDiagLink() {
+  // Replace "N недоступн." text in status with a clickable span
+  const textEl = document.getElementById('status-text');
+  if (!textEl) return;
+  const html = textEl.textContent;
+  const match = html.match(/(⚠\s*\d+\s*недоступн\.)/);
+  if (!match) return;
+  textEl.innerHTML = html.replace(match[0],
+    `<span class="diag-link" style="cursor:pointer;text-decoration:underline dotted">${match[0]}</span>`);
+  textEl.querySelector('.diag-link').addEventListener('click', e => {
+    e.stopPropagation();
+    const failed = _statusChannels.filter(c => c.failed);
+    _showDiagPopover(textEl, failed);
+  });
+}
+
+function _showDiagPopover(anchor, channels) {
+  const pop = document.getElementById('diag-popover');
+  const list = document.getElementById('diag-list');
+  list.innerHTML = '';
+  channels.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'diag-item';
+    const name = document.createElement('div');
+    name.className = 'diag-channel-name';
+    name.textContent = c.name;
+    item.appendChild(name);
+    const err = document.createElement('div');
+    if (c.error) {
+      err.className = 'diag-error';
+      err.textContent = c.error;
+    } else {
+      err.className = 'diag-no-error';
+      err.textContent = 'причина неизвестна';
+    }
+    item.appendChild(err);
+    list.appendChild(item);
+  });
+
+  // Position below the anchor
+  pop.classList.remove('hidden');
+  const rect = anchor.getBoundingClientRect();
+  const pw = pop.offsetWidth || 340;
+  let left = rect.left;
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+  pop.style.left = left + 'px';
+  pop.style.top  = (rect.bottom + 6) + 'px';
+}
+
+// Close popover on outside click
+document.addEventListener('click', () => {
+  document.getElementById('diag-popover')?.classList.add('hidden');
+});
+
 // ── WebSocket (real-time availability updates) ─────────────────────────────
 function connectWebSocket() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -580,6 +912,16 @@ function connectWebSocket() {
       Timeline.addAvailability(msg.added, msg.removed);
     } else if (msg.type === 'config_reloaded') {
       loadStations().then(buildChannelDropdown);
+    } else if (msg.type === 'cache_loaded') {
+      _handleCacheLoaded(msg);
+    } else if (msg.type === 'index_scanning') {
+      _handleIndexScanning(msg);
+    } else if (msg.type === 'index_progress') {
+      _handleIndexProgress(msg);
+    } else if (msg.type === 'index_error') {
+      _handleIndexError(msg);
+    } else if (msg.type === 'index_done') {
+      _handleIndexDone(msg);
     }
   });
 
@@ -621,25 +963,63 @@ function initHamburgerMenu() {
     themeBtn.textContent = saved === 'light' ? '🌙 Тёмный режим' : '☀️ Светлый режим';
   }
 
+  // Rescan current channel
+  document.getElementById('menu-rescan').addEventListener('click', async () => {
+    menu.classList.add('hidden');
+    if (!currentChannel) {
+      _setStatus('error', '⚠', 'Сначала выберите канал');
+      /* reload done */
+      return;
+    }
+    _setStatus('scanning', '⏳', `Пересканирование · ${_displayName(currentChannel.name)}…`);
+    try {
+      await api(`/api/rescan/${currentChannel.id}`, { method: 'POST' });
+      // Result arrives via WebSocket (index_progress / index_error)
+    } catch (e) {
+      _setStatus('error', '⚠', `Ошибка пересканирования: ${e.message}`);
+      /* error shown */
+    }
+  });
+
   // Reload config
   document.getElementById('menu-reload').addEventListener('click', async () => {
     menu.classList.add('hidden');
+    _setStatus('scanning', '⏳', 'Обновление конфигурации…');
     try {
       const res = await api('/api/reload', { method: 'POST' });
       await loadStations();
       buildChannelDropdown();
-      alert(`Конфигурация обновлена.\nСтанций: ${res.stations}, каналов: ${res.channels}, плейлогов: ${res.playlists}`);
+      _setStatus('ready', '✓',
+        `Конфигурация обновлена · ${res.stations} ст. · ${res.channels} кан. · ${res.playlists} плейл.`);
     } catch (e) {
-      alert('Ошибка обновления конфигурации: ' + e.message);
+      _setStatus('error', '⚠', `Ошибка обновления конфигурации: ${e.message}`);
     }
+  });
+
+  document.getElementById('menu-restart').addEventListener('click', async () => {
+    menu.classList.add('hidden');
+    if (!confirm('Перезапустить сервер?\nСтраница обновится автоматически через несколько секунд.')) return;
+    try {
+      await api('/api/restart', { method: 'POST' });
+    } catch { /* server going down — expected */ }
+    _setStatus('scanning', '⏳', 'Перезапуск сервера…');
+    // Poll until server is back, then reload
+    const _tryReload = () => {
+      fetch('/api/version').then(r => {
+        if (r.ok) window.location.reload();
+        else setTimeout(_tryReload, 1000);
+      }).catch(() => setTimeout(_tryReload, 1000));
+    };
+    setTimeout(_tryReload, 1500);
   });
 }
 
 async function loadVersion() {
   try {
-    const { version, name } = await api('/api/version');
+    const { version, name, build_date } = await api('/api/version');
     const el = document.getElementById('menu-ver');
-    if (el) el.textContent = `${name} v${version}`;
+    const verStr = build_date ? `${name} v${version} · ${build_date}` : `${name} v${version}`;
+    if (el) el.textContent = verStr;
     document.title = `${name} v${version}`;
   } catch (e) { /* ignore */ }
 }

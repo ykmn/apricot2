@@ -61,6 +61,38 @@ def listdir(local_path: str | None, smb: SMBConfig | None, rel: str = "") -> lis
     return []
 
 
+def scandir(local_path: str | None, smb_cfg: SMBConfig | None, rel: str = "") -> list[tuple[str, int]]:
+    """Return (name, size_bytes) pairs for files in *rel*.
+
+    Uses a single directory query (no per-file stat round-trips).
+    For SMB: smbclient.scandir returns DirEntry objects whose size is
+    already embedded in the directory response; stat(follow_symlinks=False)
+    reads it from that cached info without an extra network call.
+    """
+    if local_path:
+        p = Path(local_path) / rel if rel else Path(local_path)
+        if not p.exists():
+            return []
+        return [(e.name, e.stat().st_size) for e in p.iterdir() if e.is_file()]
+    if smb_cfg:
+        _register(smb_cfg)
+        unc = _unc(smb_cfg, rel)
+        try:
+            result = []
+            for e in smbclient.scandir(unc):
+                # _dir_info.end_of_file is embedded in the SMB FIND response —
+                # no extra round-trip per file (unlike stat()).
+                try:
+                    size = e._dir_info.end_of_file
+                except AttributeError:
+                    size = e.stat(follow_symlinks=False).st_size
+                result.append((e.name, size))
+            return result
+        except Exception:
+            return []
+    return []
+
+
 def exists(local_path: str | None, smb: SMBConfig | None, rel: str) -> bool:
     if local_path:
         return (Path(local_path) / rel).exists()

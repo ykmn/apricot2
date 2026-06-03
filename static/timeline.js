@@ -71,6 +71,7 @@ const Timeline = (() => {
   let playbackStart = null;
   let playbackTimer = null;
   let CELL_FONT_SIZE = 12;              // computed in init()
+  let hoveredRowUnit = null;            // unit of the row currently under mouse
 
   // Find the largest integer font size (px) at which testStr fits within
   // (cellWidth - padding) pixels on a canvas.
@@ -169,9 +170,11 @@ const Timeline = (() => {
   // ── Fetch availability from API ──────────────────────────────────────────
   async function _fetchAvailability() {
     if (!channelId) return;
-    // Fetch 90 days back + 2 days ahead
-    const end   = centerTime + 2 * 86400;
-    const start = centerTime - 90 * 86400;
+    // Always cover today regardless of where the viewport is,
+    // so navigating into the past doesn't drop recent intervals.
+    const now   = Date.now() / 1000;
+    const end   = Math.max(centerTime, now) + 2 * 86400;
+    const start = Math.min(centerTime, now) - 90 * 86400;
     try {
       const resp = await fetch(`/api/availability/${channelId}?start=${start}&end=${end}`);
       if (!resp.ok) return;
@@ -312,6 +315,11 @@ const Timeline = (() => {
     let drag = false;
     let dragX = 0;
 
+    canvas.addEventListener('mouseenter', () => { hoveredRowUnit = row.unit; });
+    canvas.addEventListener('mouseleave', () => {
+      if (hoveredRowUnit === row.unit) hoveredRowUnit = null;
+    });
+
     canvas.addEventListener('mousedown', e => {
       drag  = true;
       dragX = e.clientX;
@@ -366,6 +374,9 @@ const Timeline = (() => {
     init, drawAll, setTime, setChannel, setAvailability, addAvailability,
     getSelection, setSelStart, setSelEnd, clearSelection,
     getCenterTime: () => centerTime,
+    getHoveredUnit: () => hoveredRowUnit,
+    // Re-fetch availability without clearing existing data (use after index updates)
+    refreshAvailability: _fetchAvailability,
   };
 
 })();

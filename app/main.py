@@ -1,27 +1,56 @@
-"""FastAPI application — Авокадо v0.1.002"""
+"""FastAPI application — Авокадо v0.1.004"""
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-from datetime import datetime
+import subprocess
+import sys
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import aiofiles
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .app_logger import get_logger
 from .audio import export_audio, set_ffmpeg_path, stream_audio
 from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "0.1.002"
+VERSION = "0.1.005"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
+
+log = get_logger("avocado")
+
+
+def _build_date() -> str:
+    """Return mtime of the most recently modified tracked file in the project."""
+    try:
+        r = subprocess.run(
+            ["git", "ls-files"],
+            capture_output=True, text=True,
+            cwd=str(PROJECT_ROOT), timeout=3,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            latest = max(
+                (PROJECT_ROOT / f).stat().st_mtime
+                for f in r.stdout.splitlines()
+                if (PROJECT_ROOT / f).exists()
+            )
+            return datetime.fromtimestamp(latest).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        pass
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+BUILD_DATE = _build_date()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Bootstrap (mutable globals — replaced on /api/reload)
@@ -47,6 +76,10 @@ def _load_config() -> None:
     all_channels = [ch for st in stations_map.values() for ch in st.channels]
     channels_map = {ch.id: ch for ch in all_channels}
     poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
+    log.info(
+        "Config loaded — %d station(s), %d channel(s), %d playlist(s)",
+        len(stations_map), len(channels_map), len(playlists_map),
+    )
 
 
 _load_config()
@@ -54,18 +87,26 @@ _load_config()
 
 def _broadcast(channel_id: str, added: list[dict], removed: list[dict]) -> None:
     msg = json.dumps({
-        "type": "availability_update",
+        "type":       "availability_update",
         "channel_id": channel_id,
-        "added": added,
-        "removed": removed,
+        "added":      added,
+        "removed":    removed,
     })
+    _broadcast_raw(msg)
+
+
+def _broadcast_raw(msg: str) -> None:
     dead = set()
     for ws in ws_clients:
         try:
             asyncio.create_task(ws.send_text(msg))
         except Exception:
             dead.add(ws)
-    ws_clients -= dead
+    ws_clients.difference_update(dead)   # in-place — не создаёт локальную переменную
+
+
+def _progress_callback(data: dict) -> None:
+    _broadcast_raw(json.dumps(data))
 
 
 file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
@@ -77,20 +118,53 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Request logging middleware
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.middleware("http")
+async def _log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        log.error("Unhandled error %s %s: %s", request.method, request.url.path, exc)
+        raise
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    path = request.url.path
+    # Skip static files and WebSocket upgrades from the log
+    if not path.startswith("/static") and not path.startswith("/ws"):
+        log.info(
+            "%s %s%s -> %d (%.0f ms)",
+            request.method,
+            path,
+            f"?{request.url.query}" if request.url.query else "",
+            response.status_code,
+            elapsed_ms,
+        )
+    return response
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Startup
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup() -> None:
+    log.info("*" * 72)
+    log.info("* Авокадо v%s  —  %s", VERSION,
+             __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    log.info("*" * 72)
+    log.info("Авокадо v%s starting up", VERSION)
     asyncio.create_task(_background_startup())
 
 
 async def _background_startup() -> None:
     try:
-        await file_index.initial_scan()
+        await file_index.initial_scan(progress=_progress_callback)
     except Exception as exc:
-        print(f"[startup] initial scan error: {exc}")
+        log.error("Initial scan failed: %s", exc)
     file_index.start_polling()
+    asyncio.create_task(_export_cleanup_loop())
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -108,17 +182,87 @@ async def index() -> FileResponse:
 
 @app.get("/api/version")
 async def get_version() -> dict:
-    return {"version": VERSION, "name": "Авокадо"}
+    return {"version": VERSION, "name": "Авокадо", "build_date": BUILD_DATE}
+
+
+@app.get("/api/index_status")
+async def get_index_status() -> dict:
+    """Current file-index state: scanning progress or final file counts."""
+    return file_index.get_state()
+
+
+@app.post("/api/rescan/{channel_id}")
+async def rescan_channel(channel_id: str) -> dict:
+    """Force a rescan of one channel and broadcast the result."""
+    idx = file_index.get_index(channel_id)
+    if idx is None:
+        raise HTTPException(404, f"Channel {channel_id!r} not found")
+
+    ch = idx.channel
+    log.info("Manual rescan requested for %s (%s)", ch.name, ch.id)
+
+    async def _do_rescan() -> None:
+        # Notify scan start
+        _broadcast_raw(json.dumps({
+            "type":         "index_scanning",
+            "done":         0,
+            "total":        1,
+            "channel_id":   ch.id,
+            "channel_name": ch.name,
+            "rescan":       True,
+        }))
+        # Re-probe audio params (bitrate may have been wrong)
+        await file_index.probe_channel(idx)
+        # Always clear for a manual rescan — ensures stale durations
+        # (e.g. files that were still recording at last scan time) are refreshed.
+        idx.clear()
+        success, err_msg = await file_index._try_scan(idx)
+        n_files = len(idx._files)
+
+        # Update state
+        for entry in file_index.index_channels:
+            if entry["id"] == ch.id:
+                entry["files"]  = n_files
+                entry["done"]   = True
+                entry["failed"] = not success
+                entry["error"]  = err_msg
+
+        if success:
+            from . import cache as disk_cache
+            disk_cache.save(ch.id, list(idx._files))
+            log.info("Manual rescan done for %s: %d files", ch.id, n_files)
+            _broadcast_raw(json.dumps({
+                "type":         "index_progress",
+                "done":         1,
+                "total":        1,
+                "channel_id":   ch.id,
+                "channel_name": ch.name,
+                "files":        n_files,
+                "rescan":       True,
+            }))
+        else:
+            log.error("Manual rescan failed for %s", ch.id)
+            _broadcast_raw(json.dumps({
+                "type":         "index_error",
+                "done":         1,
+                "total":        1,
+                "channel_id":   ch.id,
+                "channel_name": ch.name,
+                "error":        err_msg,
+                "rescan":       True,
+            }))
+
+    asyncio.create_task(_do_rescan())
+    return {"ok": True, "channel_id": channel_id, "channel_name": ch.name}
 
 
 @app.post("/api/reload")
 async def reload_config() -> dict:
     """Reload stations, playlists and settings from YAML files without restart."""
+    log.info("Config reload requested")
     _load_config()
-    # Re-setup file index with new channel list
     file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
     asyncio.create_task(_background_startup())
-    # Notify all clients
     msg = json.dumps({"type": "config_reloaded"})
     for ws in list(ws_clients):
         try:
@@ -126,11 +270,68 @@ async def reload_config() -> dict:
         except Exception:
             pass
     return {
-        "ok": True,
+        "ok":       True,
         "stations": len(stations_map),
         "channels": len(channels_map),
         "playlists": len(playlists_map),
     }
+
+
+@app.post("/api/restart")
+async def restart_server() -> dict:
+    """Restart the server process (replaces current process with a fresh one)."""
+    log.info("Server restart requested")
+    async def _do_restart() -> None:
+        await asyncio.sleep(0.3)
+        # Start a new process then exit the current one
+        subprocess.Popen([sys.executable] + sys.argv)
+        os._exit(0)
+    asyncio.create_task(_do_restart())
+    return {"ok": True}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Export cleanup
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _cleanup_exports() -> int:
+    """Delete export files older than retention_days. Returns number deleted."""
+    export_cfg   = settings.get("export", {})
+    retention    = int(export_cfg.get("retention_days", 3))
+    cutoff       = datetime.now() - timedelta(days=retention)
+    deleted      = 0
+    for f in EXPORT_DIR.iterdir():
+        if f.is_file() and datetime.fromtimestamp(f.stat().st_mtime) < cutoff:
+            try:
+                f.unlink()
+                deleted += 1
+                log.debug("Export cleanup: removed %s", f.name)
+            except Exception as exc:
+                log.warning("Export cleanup: could not remove %s: %s", f.name, exc)
+    if deleted:
+        log.info("Export cleanup: deleted %d expired file(s) (retention=%dd)", deleted, retention)
+    return deleted
+
+
+async def _export_cleanup_loop() -> None:
+    """Run export cleanup on startup and then daily at the configured time."""
+    # Run once at startup
+    _cleanup_exports()
+
+    export_cfg   = settings.get("export", {})
+    cleanup_time = export_cfg.get("cleanup_time", "03:00")
+    try:
+        hh, mm = map(int, cleanup_time.split(":"))
+    except Exception:
+        hh, mm = 3, 0
+
+    while True:
+        now  = datetime.now()
+        next_run = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if next_run <= now:
+            next_run = next_run.replace(day=next_run.day + 1)
+        await asyncio.sleep((next_run - now).total_seconds())
+        _cleanup_exports()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -141,14 +342,20 @@ async def reload_config() -> dict:
 async def get_stations() -> list[dict]:
     return [
         {
-            "id": st.id,
+            "id":   st.id,
             "name": st.name,
             "channels": [
                 {
-                    "id": ch.id,
-                    "name": ch.name,
+                    "id":             ch.id,
+                    "name":           ch.name,
                     "file_extension": ch.file_extension,
-                    "playlists": ch.playlists,
+                    "playlists":      ch.playlists,
+                    "local_path":     ch.local_path,
+                    "smb": {
+                        "host":  ch.smb.host,
+                        "share": ch.smb.share,
+                        "path":  ch.smb.path,
+                    } if ch.smb else None,
                 }
                 for ch in st.channels
             ],
@@ -161,7 +368,7 @@ async def get_stations() -> list[dict]:
 async def get_availability(
     channel_id: str,
     start: float = Query(..., description="Unix timestamp"),
-    end: float = Query(..., description="Unix timestamp"),
+    end:   float = Query(..., description="Unix timestamp"),
 ) -> list[dict]:
     idx = file_index.get_index(channel_id)
     if idx is None:
@@ -173,28 +380,28 @@ async def get_availability(
 async def get_playlist(
     channel_id: str,
     start: float = Query(...),
-    end: float = Query(...),
+    end:   float = Query(...),
 ) -> list[dict]:
     channel = channels_map.get(channel_id)
     if channel is None:
         raise HTTPException(404)
     start_dt = datetime.fromtimestamp(start)
-    end_dt = datetime.fromtimestamp(end)
-    entries = []
+    end_dt   = datetime.fromtimestamp(end)
+    entries  = []
     for pl_id in channel.playlists:
         pl_cfg = playlists_map.get(pl_id)
         if pl_cfg is None:
             continue
         for e in get_entries(pl_cfg, start_dt, end_dt):
             cl_colors = pl_cfg.class_colors
-            cl_names = pl_cfg.class_names
+            cl_names  = pl_cfg.class_names
             entries.append({
                 "timestamp": e.timestamp.timestamp(),
-                "title": e.title,
-                "cls": e.cls,
-                "duration": e.duration,
-                "color": cl_colors.get(e.cls, cl_colors.get("default", "#e0e0e0")),
-                "cls_name": cl_names.get(e.cls, e.cls),
+                "title":     e.title,
+                "cls":       e.cls,
+                "duration":  e.duration,
+                "color":     cl_colors.get(e.cls, cl_colors.get("default", "#e0e0e0")),
+                "cls_name":  cl_names.get(e.cls, e.cls),
             })
     entries.sort(key=lambda x: x["timestamp"])
     return entries
@@ -206,7 +413,7 @@ async def get_playlist_config(channel_id: str) -> dict:
     if channel is None:
         raise HTTPException(404)
     colors: dict = {}
-    names: dict = {}
+    names:  dict = {}
     for pl_id in channel.playlists:
         pl_cfg = playlists_map.get(pl_id)
         if pl_cfg:
@@ -221,20 +428,26 @@ async def get_playlist_config(channel_id: str) -> dict:
 
 @app.get("/api/audio/stream")
 async def audio_stream(
-    channel: str = Query(...),
-    start: float = Query(...),
-    end: float = Query(...),
-    format: str = Query("mp3"),
-    bitrate: str = Query("192k"),
-    sample_rate: int = Query(None),
+    channel:     str   = Query(...),
+    start:       float = Query(...),
+    end:         float = Query(...),
+    format:      str   = Query("mp3"),
+    bitrate:     str   = Query("192k"),
+    sample_rate: int   = Query(None),
 ):
     channel_cfg = channels_map.get(channel)
     if channel_cfg is None:
         raise HTTPException(404)
     start_dt = datetime.fromtimestamp(start)
-    end_dt = datetime.fromtimestamp(end)
+    end_dt   = datetime.fromtimestamp(end)
     media_types = {"mp3": "audio/mpeg", "wav": "audio/wav", "aac": "audio/aac"}
-    media_type = media_types.get(format, "audio/mpeg")
+    media_type  = media_types.get(format, "audio/mpeg")
+
+    log.info(
+        "Stream %s  %s → %s  fmt=%s br=%s",
+        channel, start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        end_dt.strftime("%H:%M:%S"), format, bitrate,
+    )
 
     async def gen():
         async for chunk in stream_audio(channel_cfg, start_dt, end_dt, format, bitrate, sample_rate):
@@ -245,11 +458,11 @@ async def audio_stream(
 
 @app.post("/api/audio/export")
 async def audio_export(body: dict) -> dict:
-    channel_id = body.get("channel_id", "")
-    start = float(body.get("start", 0))
-    end = float(body.get("end", 0))
-    fmt = body.get("format", "mp3")
-    bitrate = body.get("bitrate") or "192k"
+    channel_id  = body.get("channel_id", "")
+    start       = float(body.get("start", 0))
+    end         = float(body.get("end", 0))
+    fmt         = body.get("format", "mp3")
+    bitrate     = body.get("bitrate") or "192k"
     sample_rate = body.get("sample_rate")
     if sample_rate is not None:
         sample_rate = int(sample_rate)
@@ -259,12 +472,23 @@ async def audio_export(body: dict) -> dict:
         raise HTTPException(404)
 
     start_dt = datetime.fromtimestamp(start)
-    end_dt = datetime.fromtimestamp(end)
-    ts = start_dt.strftime("%Y%m%d_%H%M%S")
-    fname = f"{channel_id}_{ts}.{fmt}"
+    end_dt   = datetime.fromtimestamp(end)
+    ts       = start_dt.strftime("%Y%m%d_%H%M%S")
+    fname    = f"{channel_id}_{ts}.{fmt}"
     out_path = str(EXPORT_DIR / fname)
 
-    await export_audio(channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path)
+    log.info(
+        "Export %s  %s → %s  fmt=%s br=%s → %s",
+        channel_id, start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        end_dt.strftime("%H:%M:%S"), fmt, bitrate, fname,
+    )
+
+    try:
+        await export_audio(channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path)
+    except Exception as exc:
+        log.error("Export failed for %s: %s", channel_id, exc)
+        raise HTTPException(500, str(exc))
+
     return {"filename": fname, "download_url": f"/api/audio/download/{fname}"}
 
 
@@ -273,6 +497,7 @@ async def audio_download(filename: str) -> FileResponse:
     path = EXPORT_DIR / filename
     if not path.exists():
         raise HTTPException(404)
+    log.info("Download: %s", filename)
     return FileResponse(str(path), filename=filename, media_type="application/octet-stream")
 
 
@@ -284,6 +509,7 @@ async def audio_download(filename: str) -> FileResponse:
 async def websocket_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     ws_clients.add(ws)
+    log.debug("WebSocket connected (total: %d)", len(ws_clients))
     try:
         while True:
             await asyncio.sleep(30)
@@ -292,3 +518,4 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         pass
     finally:
         ws_clients.discard(ws)
+        log.debug("WebSocket disconnected (total: %d)", len(ws_clients))

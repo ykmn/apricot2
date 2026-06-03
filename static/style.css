@@ -79,33 +79,55 @@ body {
 
 #channel-selector-wrap {
   position: relative;
-  flex: 0 0 320px;
+  flex: 0 0 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#channel-label {
+  font-size: 15px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.4;
+}
+
+#channel-input-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 #channel-search {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
-  padding: 5px 8px;
-  font-size: 13px;
+  padding: 7px 10px;
+  font-size: 15px;
   outline: none;
 }
 #channel-search:focus { border-color: var(--accent); }
 
-#channel-label {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+#channel-copy-btn,
+#channel-list-btn {
+  flex: 0 0 auto;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
   color: var(--text2);
-  font-size: 12px;
-  pointer-events: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 5px 9px;
+  line-height: 1;
 }
+#channel-copy-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+#channel-list-btn:hover { border-color: var(--accent);  color: var(--accent);  }
 
 #channel-dropdown {
   position: absolute;
@@ -223,7 +245,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   background: var(--accent);
   color: #fff;
   font-size: 16px;
-  width: 38px;
+  width: 76px;
   padding: 0;
 }
 .btn-transport:hover { filter: brightness(1.2); }
@@ -269,6 +291,136 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   color: var(--text2);
   font-family: monospace;
   font-size: 12px;
+}
+
+/* ── Index status bar ────────────────────────────────────── */
+#status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.3s, color 0.3s;
+  min-height: 26px;
+}
+
+#status-bar.status-scanning {
+  background: rgba(15, 154, 240, 0.08);
+  color: var(--text2);
+}
+
+#status-bar.status-ready {
+  background: rgba(14, 196, 122, 0.07);
+  color: var(--accent2);
+}
+
+#status-bar.status-error {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--danger);
+}
+
+#status-bar.hidden { display: none !important; }
+
+#status-icon { flex-shrink: 0; font-size: 13px; }
+
+#status-text { font-weight: 500; white-space: nowrap; }
+
+#status-detail {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text2);
+  font-size: 11px;
+}
+
+/* Progress dots — one per channel, filled when done */
+.status-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.25s;
+}
+.status-dot.done        { background: var(--accent2); }
+.status-dot.failed      { background: var(--danger); }
+.status-dot.rescanning  {
+  background: var(--accent);
+  animation: dot-pulse 0.7s ease-in-out infinite alternate;
+}
+@keyframes dot-pulse {
+  from { opacity: 0.3; transform: scale(0.85); }
+  to   { opacity: 1.0; transform: scale(1.15); }
+}
+
+#status-close {
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+#status-close:hover { opacity: 1; }
+
+/* ── Channel diagnostics popover ────────────────────────────── */
+#diag-popover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  padding: 10px 14px 12px;
+  min-width: 320px;
+  max-width: 520px;
+  max-height: 380px;
+  overflow-y: auto;
+  z-index: 500;
+  font-size: 12px;
+}
+
+#diag-title {
+  font-weight: 600;
+  color: var(--danger);
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.diag-item {
+  border-top: 1px solid var(--border);
+  padding: 7px 0 5px;
+}
+.diag-item:first-child { border-top: none; padding-top: 0; }
+
+.diag-channel-name {
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.diag-error {
+  color: var(--danger);
+  font-family: monospace;
+  font-size: 11px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.diag-no-error {
+  color: var(--text2);
+  font-style: italic;
 }
 
 /* ── Main columns ─────────────────────────────────────────── */

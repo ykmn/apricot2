@@ -1,0 +1,46 @@
+# Playlist log configuration: Retro FM
+id: retro_fm_plog
+name: "Retro FM — Плейлог"
+
+# SMB access to the playout server logs
+smb:
+  host: "playout.domain.local"
+  share: "logs"
+  path: "retro_fm/playlogs"
+  username: "svc_radio"
+  password_env: "PLAYOUT_PASSWORD"
+  domain: "CORP"
+
+# Alternatively, local path:
+# local_path: "/mnt/playout/retro_fm/playlogs"
+
+# File naming: date-based mask using strftime syntax
+# Example result: "2026-06-02.csv"
+file_mask: "%Y-%m-%d.csv"
+
+# CSV parsing
+encoding: "utf-8-sig"   # handles BOM from Windows exports
+delimiter: ";"
+
+# Field mapping: map our standard field names to actual CSV column headers
+fields:
+  date: "Date"          # column containing the date (YYYY-MM-DD)
+  time: "Time"          # column containing the time (HH:MM:SS)
+  title: "Title"        # element title / song name
+  cls: "Class"          # element class code: M=music, J=jingle, A=ad, P=program
+  duration: "Duration"  # duration in seconds (optional)
+
+# Class colors for the playlist UI
+class_colors:
+  M: "#f48fb1"   # music — pink
+  J: "#90caf9"   # jingle — light blue
+  A: "#ffcc80"   # ad — orange
+  P: "#a5d6a7"   # program — green
+  default: "#e0e0e0"
+
+# Class display names
+class_names:
+  M: "Музыка"
+  J: "Джингл"
+  A: "Реклама"
+  P: "Передача"

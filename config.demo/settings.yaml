@@ -8,8 +8,8 @@ watcher:
   poll_interval: 10
 
 # Export settings
+# Аудиофайлы сохраняются в папку export/ в корне проекта (создаётся автоматически)
 export:
-  temp_dir: "/tmp/radio_monitor_export"   # Windows: "C:/Temp/radio_monitor"
   default_format: "mp3"
   default_bitrate: "192k"
 
