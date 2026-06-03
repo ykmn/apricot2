@@ -20,6 +20,33 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def invalidate_recent(playlist_id: str, days: int = 2) -> None:
+    """Delete cache files for the last N days so they get re-fetched from source."""
+    pl_dir = CACHE_DIR / playlist_id
+    if not pl_dir.exists():
+        return
+    today = datetime.now().date()
+    for i in range(days):
+        p = _cache_path(playlist_id, today - timedelta(days=i))
+        if p.exists():
+            p.unlink()
+            log.debug("Playlog cache invalidated: %s %s", playlist_id, p.stem)
+
+
+def check_sources(config: PlaylistConfig, d: date) -> list[dict]:
+    """Try to open each source for date d. Returns [{priority, ok, error}]."""
+    results = []
+    for source in sorted(config.sources, key=lambda s: s.priority):
+        filename = d.strftime(source.file_mask)
+        try:
+            raw = smb.read_bytes(source.local_path, source.smb, filename)
+            results.append({"priority": source.priority, "ok": bool(raw), "error": ""})
+        except Exception as exc:
+            results.append({"priority": source.priority, "ok": False,
+                            "error": str(exc)[:200]})
+    return results
+
+
 def get_entries(
     config: PlaylistConfig,
     start: datetime,

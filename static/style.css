@@ -515,6 +515,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   transition: opacity 0.1s;
 }
 .playlist-row:hover .pl-add-btn { opacity: 1; }
+.playlist-row.pl-current .pl-title { font-weight: 700; }
 
 /* ── Log-list rows ────────────────────────────────────────── */
 .log-row {
@@ -630,7 +631,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 220px;
+  min-width: 330px;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -668,6 +669,43 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   padding: 6px 14px 8px;
   user-select: none;
 }
+
+/* ── Playlog status bar ───────────────────────────────────── */
+#playlog-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  font-size: 11px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  min-height: 22px;
+  background: rgba(14, 196, 122, 0.04);
+  color: var(--text2);
+}
+#playlog-bar.hidden { display: none !important; }
+#plbar-icon  { flex-shrink: 0; font-size: 11px; }
+#plbar-text  { font-weight: 500; white-space: nowrap; }
+#plbar-detail {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text2);
+}
+#plbar-close {
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  opacity: 0.5;
+  margin-left: auto;
+  transition: opacity 0.15s;
+}
+#plbar-close:hover { opacity: 1; }
 
 /* ── Playback loading indicator ──────────────────────────── */
 #play-loading {

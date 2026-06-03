@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   Timeline.init({
     onTimeChange: ts => {
       refreshPlaylistForVisible();
+      _scheduleHighlight();
       if (isPlaying && !_tlAnimUpdate) _debouncedSeek(ts);
     },
     onSelChange: (s, e) => {
@@ -243,6 +244,7 @@ function renderPlaylist(entries) {
 
     const row = document.createElement('div');
     row.className = 'playlist-row';
+    if (e.color) row.style.background = _hexToRgba(e.color, 0.25);
 
     const cls = document.createElement('span');
     cls.className = 'pl-cls';
@@ -280,6 +282,38 @@ function renderPlaylist(entries) {
 
     list.appendChild(row);
   });
+  _updateCurrentEntry();
+}
+
+let _highlightTimer = null;
+function _scheduleHighlight() {
+  clearTimeout(_highlightTimer);
+  _highlightTimer = setTimeout(_updateCurrentEntry, 80);
+}
+
+function _updateCurrentEntry() {
+  const ts   = Timeline.getCenterTime();
+  const list = document.getElementById('playlist-list');
+  const rows = list.querySelectorAll('.playlist-row');
+  if (!rows.length) return;
+
+  // Find last entry with timestamp <= ts
+  let idx = -1;
+  for (let i = 0; i < playlistEntries.length; i++) {
+    if (playlistEntries[i].timestamp <= ts) idx = i;
+    else break;
+  }
+
+  rows.forEach((row, i) => row.classList.toggle('pl-current', i === idx));
+
+  if (idx >= 0 && rows[idx]) {
+    const row      = rows[idx];
+    const rowRect  = row.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    // row's position inside scroll content
+    const relTop   = rowRect.top - listRect.top + list.scrollTop;
+    list.scrollTop = Math.max(0, relTop - list.clientHeight / 3);
+  }
 }
 
 function addToLogFromPlaylist(entry) {
@@ -838,10 +872,15 @@ function initHotkeys() {
 
 // ── Index status bar ───────────────────────────────────────────────────────
 let _statusChannels = [];   // [{id, name, files, done, failed, rescanning}]
+// [{pl_id, pl_name, priority, ok, error, checking}]
+let _plSources = [];
 
 function initStatusBar() {
   document.getElementById('status-close').addEventListener('click', () => {
     document.getElementById('status-bar').classList.add('hidden');
+  });
+  document.getElementById('plbar-close').addEventListener('click', () => {
+    document.getElementById('playlog-bar').classList.add('hidden');
   });
 
   // Fetch current state (handles page reload mid-scan or after scan)
@@ -849,6 +888,12 @@ function initStatusBar() {
     .then(r => r.json())
     .then(data => _applyIndexStatus(data))
     .catch(() => _setStatus('error', '⚠', 'Не удалось получить статус индекса'));
+
+  // Fetch last playlog check result (may be empty if check not done yet)
+  fetch('/api/playlog_status')
+    .then(r => r.json())
+    .then(data => { if (data.length) _applyPlaylogStatus(data); })
+    .catch(() => {});
 }
 
 function _applyIndexStatus(data) {
@@ -935,6 +980,99 @@ function _handleIndexDone(msg) {
     `Индекс готов · ${msg.total_files} файлов · ${msg.channels} каналов${failedStr}`);
   if (failedN) _makeDiagLink();
 }
+
+// ── Playlog status bar ─────────────────────────────────────────────────────
+
+function _handlePlaylogChecking() {
+  const bar = document.getElementById('playlog-bar');
+  bar.classList.remove('hidden');
+  _plSources = _plSources.map(s => ({ ...s, checking: true }));
+  if (!_plSources.length) {
+    document.getElementById('plbar-icon').textContent   = '⟳';
+    document.getElementById('plbar-text').textContent   = 'Проверка плейлогов…';
+    document.getElementById('plbar-detail').textContent = '';
+  }
+  _rebuildPlDots();
+}
+
+function _applyPlaylogStatus(playlogs) {
+  _plSources = [];
+  playlogs.forEach(pl => {
+    pl.sources.forEach(src => {
+      _plSources.push({
+        pl_id:    pl.id,
+        pl_name:  pl.name,
+        priority: src.priority,
+        ok:       src.ok,
+        error:    src.error || '',
+        checking: false,
+      });
+    });
+  });
+  _rebuildPlDots();
+
+  const total  = _plSources.length;
+  const failed = _plSources.filter(s => !s.ok).length;
+  const bar    = document.getElementById('playlog-bar');
+  bar.classList.remove('hidden');
+
+  if (total === 0) {
+    bar.classList.add('hidden');
+    return;
+  }
+  if (failed === 0) {
+    document.getElementById('plbar-icon').textContent   = '✓';
+    document.getElementById('plbar-text').textContent   = `Плейлоги доступны · ${total} источн.`;
+    document.getElementById('plbar-detail').textContent = '';
+    // Auto-clear text after 5s (bar stays, dots remain)
+    setTimeout(() => {
+      document.getElementById('plbar-icon').textContent   = '';
+      document.getElementById('plbar-text').textContent   = '';
+      document.getElementById('plbar-detail').textContent = '';
+    }, 5000);
+  } else {
+    document.getElementById('plbar-icon').textContent   = '⚠';
+    document.getElementById('plbar-text').textContent   =
+      `Плейлоги: ${failed} из ${total} недоступн.`;
+    document.getElementById('plbar-detail').textContent = '';
+  }
+}
+
+function _rebuildPlDots() {
+  const bar = document.getElementById('playlog-bar');
+  const old = document.getElementById('plbar-dots');
+  if (old) old.remove();
+  if (!_plSources.length) return;
+
+  const dots = document.createElement('span');
+  dots.id = 'plbar-dots';
+  dots.className = 'status-dots';
+
+  _plSources.forEach(s => {
+    const dot = document.createElement('span');
+    if (s.checking)   dot.className = 'status-dot rescanning';
+    else if (s.ok)    dot.className = 'status-dot done';
+    else              dot.className = 'status-dot failed';
+
+    const label = `${_displayName(s.pl_name)} (приор. ${s.priority})`;
+    dot.title = s.ok       ? `${label}: доступен`
+              : s.checking ? `${label}: проверяется…`
+              : `${label}: недоступен — нажмите для диагностики`;
+
+    if (!s.ok && !s.checking) {
+      dot.style.cursor = 'pointer';
+      dot.addEventListener('click', e => {
+        e.stopPropagation();
+        _showDiagPopover(dot, [{ name: label, error: s.error }]);
+      });
+    }
+    dots.appendChild(dot);
+  });
+
+  bar.insertBefore(dots, document.getElementById('plbar-close'));
+}
+
+// ── Audio index status helpers ─────────────────────────────────────────────
 
 let _statusHideTimer = null;
 
@@ -1061,6 +1199,10 @@ function connectWebSocket() {
       _handleIndexError(msg);
     } else if (msg.type === 'index_done') {
       _handleIndexDone(msg);
+    } else if (msg.type === 'playlog_checking') {
+      _handlePlaylogChecking();
+    } else if (msg.type === 'playlog_status') {
+      _applyPlaylogStatus(msg.playlogs);
     }
   });
 
@@ -1120,6 +1262,28 @@ function initHamburgerMenu() {
     }
   });
 
+  // Rescan playlogs for current station
+  document.getElementById('menu-rescan-playlogs').addEventListener('click', async () => {
+    menu.classList.add('hidden');
+    if (!currentChannel) {
+      document.getElementById('plbar-icon').textContent = '⚠';
+      document.getElementById('plbar-text').textContent = 'Сначала выберите канал';
+      document.getElementById('playlog-bar').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('plbar-icon').textContent   = '⟳';
+    document.getElementById('plbar-text').textContent   = 'Пересканирование плейлогов…';
+    document.getElementById('plbar-detail').textContent = '';
+    document.getElementById('playlog-bar').classList.remove('hidden');
+    try {
+      await api(`/api/rescan_playlogs/${currentChannel.id}`, { method: 'POST' });
+      // Result arrives via WS (playlog_checking → playlog_status)
+    } catch (e) {
+      document.getElementById('plbar-icon').textContent = '⚠';
+      document.getElementById('plbar-text').textContent = `Ошибка: ${e.message}`;
+    }
+  });
+
   // Reload config
   document.getElementById('menu-reload').addEventListener('click', async () => {
     menu.classList.add('hidden');
@@ -1165,6 +1329,13 @@ async function loadVersion() {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function _fmt2(n) { return String(n).padStart(2, '0'); }
+
+function _hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 function _contrastColor(hex) {
   const r = parseInt(hex.slice(1,3), 16);

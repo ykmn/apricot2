@@ -24,7 +24,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "0.1.010"
+VERSION = "0.1.011"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -64,6 +64,7 @@ playlists_map: dict = {}
 all_channels: list = []
 channels_map: dict = {}
 poll_interval: int = 10
+_playlog_status: list = []   # last check result, returned by /api/playlog_status
 
 ws_clients: set[WebSocket] = set()
 
@@ -167,6 +168,25 @@ async def _background_startup() -> None:
         log.error("Initial scan failed: %s", exc)
     file_index.start_polling()
     asyncio.create_task(_export_cleanup_loop())
+    asyncio.create_task(_check_playlogs())
+
+
+async def _check_playlogs() -> None:
+    """Check each playlog source for yesterday's file and broadcast results."""
+    global _playlog_status
+    from datetime import timedelta
+    from .playlist import check_sources
+    check_date = (datetime.now() - timedelta(days=1)).date()
+    _broadcast_raw(json.dumps({"type": "playlog_checking"}))
+    results = []
+    for pl_cfg in playlists_map.values():
+        src = await asyncio.to_thread(check_sources, pl_cfg, check_date)
+        results.append({"id": pl_cfg.id, "name": pl_cfg.name, "sources": src})
+    _playlog_status = results
+    _broadcast_raw(json.dumps({"type": "playlog_status", "playlogs": results}))
+    ok  = sum(1 for pl in results for s in pl["sources"] if s["ok"])
+    bad = sum(1 for pl in results for s in pl["sources"] if not s["ok"])
+    log.info("Playlog check done: %d ok, %d unavailable (date=%s)", ok, bad, check_date)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -185,6 +205,38 @@ async def index() -> FileResponse:
 @app.get("/api/version")
 async def get_version() -> dict:
     return {"version": VERSION, "name": "Авокадо", "build_date": BUILD_DATE}
+
+
+@app.post("/api/rescan_playlogs/{channel_id}")
+async def rescan_playlogs(channel_id: str) -> dict:
+    """Clear recent playlog cache for the channel's station and recheck all sources."""
+    channel = channels_map.get(channel_id)
+    if channel is None:
+        raise HTTPException(404, f"Channel {channel_id!r} not found")
+
+    # Collect unique playlist IDs for the whole station
+    station = next((s for s in stations_map.values()
+                    if any(ch.id == channel_id for ch in s.channels)), None)
+    pl_ids: set[str] = set()
+    if station:
+        for ch in station.channels:
+            pl_ids.update(ch.playlogs)
+    else:
+        pl_ids.update(channel.playlogs)
+
+    from .playlist import invalidate_recent
+    for pl_id in pl_ids:
+        invalidate_recent(pl_id)
+    log.info("Playlog cache invalidated for %d playlist(s) (station of %s)", len(pl_ids), channel_id)
+
+    asyncio.create_task(_check_playlogs())
+    return {"ok": True, "playlists": list(pl_ids)}
+
+
+@app.get("/api/playlog_status")
+async def get_playlog_status() -> list:
+    """Last playlog source check result (for page reload without WS history)."""
+    return _playlog_status
 
 
 @app.get("/api/index_status")

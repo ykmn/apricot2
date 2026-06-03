@@ -45,6 +45,7 @@
         <div id="hamburger-menu" class="hidden">
           <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
           <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
+          <button class="menu-item" id="menu-rescan-playlogs">📋 Пересканировать плейлоги станции</button>
           <div class="menu-sep"></div>
           <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
           <div class="menu-sep"></div>
@@ -87,6 +88,14 @@
     <span id="status-detail"></span>
     <span id="play-loading" class="hidden">⌛ Буферизация…</span>
     <span id="status-close" title="Скрыть">✕</span>
+  </div>
+
+  <!-- ── Playlog status bar ──────────────────────────────────────── -->
+  <div id="playlog-bar" class="hidden">
+    <span id="plbar-icon"></span>
+    <span id="plbar-text">Проверка плейлогов…</span>
+    <span id="plbar-detail"></span>
+    <span id="plbar-close" title="Скрыть">✕</span>
   </div>
 
   <!-- ── Channel diagnostics popover ──────────────────────────────── -->
