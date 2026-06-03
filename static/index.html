@@ -11,48 +11,54 @@
 <body>
 <div id="app">
 
-  <!-- ── Top bar ─────────────────────────────────────────────────── -->
+  <!-- ── Top bar (строка 1: лого + меню) ─────────────────────────── -->
   <div id="topbar">
-    <div id="app-brand">🥑 Авокадо</div>
-
-    <div id="channel-selector-wrap">
-      <div id="channel-label">Выберите канал</div>
-      <div id="channel-input-row">
-        <input id="channel-search" type="text" placeholder="Фильтр…" autocomplete="off">
-        <button id="channel-list-btn" title="Открыть список каналов">▾</button>
-        <button id="channel-copy-btn" title="Скопировать путь к папке">📃</button>
-      </div>
-      <div id="channel-dropdown" class="dropdown hidden"></div>
+    <div id="app-brand">
+      <img src="/static/favicon.svg" width="64" height="64" alt="">
+      <span id="app-name">Авокадо</span>
     </div>
+    <div id="hamburger-wrap">
+      <button id="btn-hamburger" title="Меню">☰</button>
+      <div id="hamburger-menu" class="hidden">
+        <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
+        <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
+        <button class="menu-item" id="menu-rescan-playlogs">📋 Пересканировать плейлоги станции</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" id="menu-restart">🔁 Перезапустить сервер</button>
+        <div class="menu-sep"></div>
+        <span class="menu-version" id="menu-ver">v…</span>
+      </div>
+    </div>
+  </div>
 
-    <div id="topbar-right">
-      <span class="clock-part" id="clk-day">--</span>
-      <span class="clock-sep">.</span>
-      <span class="clock-part" id="clk-month">--</span>
-      <span class="clock-sep">.</span>
-      <span class="clock-part" id="clk-year">----</span>
-      <span class="clock-sep ml">&#160;</span>
-      <span class="clock-part" id="clk-h">--</span>
-      <span class="clock-sep">:</span>
-      <span class="clock-part" id="clk-m">--</span>
-      <span class="clock-sep">:</span>
-      <span class="clock-part" id="clk-s">--</span>
-      <button id="btn-now" title="Перейти к текущему времени">⟳</button>
-
-      <!-- ── Hamburger ─── -->
-      <div id="hamburger-wrap">
-        <button id="btn-hamburger" title="Меню">☰</button>
-        <div id="hamburger-menu" class="hidden">
-          <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
-          <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
-          <button class="menu-item" id="menu-rescan-playlogs">📋 Пересканировать плейлоги станции</button>
-          <div class="menu-sep"></div>
-          <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
-          <div class="menu-sep"></div>
-          <button class="menu-item" id="menu-restart">🔁 Перезапустить сервер</button>
-          <div class="menu-sep"></div>
-          <span class="menu-version" id="menu-ver">v…</span>
+  <!-- ── Channel bar (строка 2: канал + фильтр + часы) ────────────── -->
+  <div id="channel-bar">
+    <div id="channel-label">Выберите канал</div>
+    <div id="channel-controls">
+      <div id="channel-selector-wrap">
+        <div id="channel-input-row">
+          <input id="channel-search" type="text" placeholder="Фильтр…" autocomplete="off">
+          <button id="channel-list-btn" title="Открыть список каналов">▾</button>
+          <button id="channel-copy-btn" title="Скопировать путь к папке">⧉</button>
+          <button id="btn-copy-url" title="Скопировать ссылку на текущее время">#</button>
         </div>
+        <div id="channel-dropdown" class="dropdown hidden"></div>
+      </div>
+      <div id="topbar-right">
+        <span class="clock-part" id="clk-day">--</span>
+        <span class="clock-sep">.</span>
+        <span class="clock-part" id="clk-month">--</span>
+        <span class="clock-sep">.</span>
+        <span class="clock-part" id="clk-year">----</span>
+        <span class="clock-sep ml">&#160;</span>
+        <span class="clock-part" id="clk-h">--</span>
+        <span class="clock-sep">:</span>
+        <span class="clock-part" id="clk-m">--</span>
+        <span class="clock-sep">:</span>
+        <span class="clock-part" id="clk-s">--</span>
+        <button id="btn-now" title="Перейти к текущему времени">⟳</button>
       </div>
     </div>
   </div>
@@ -72,7 +78,7 @@
       <button id="btn-play"  class="btn-transport" title="Воспроизвести / Пауза">▶</button>
       <button id="btn-mark-in"  class="btn-mark" title="Установить начало сегмента">In</button>
       <button id="btn-mark-out" class="btn-mark" title="Установить конец сегмента">Out</button>
-      <span id="sel-label">—</span>
+      <div id="sel-label"><span class="sel-empty">—</span></div>
       <span id="sel-warning" class="hidden"></span>
     </div>
     <div id="transport-right">

@@ -44,8 +44,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   connectWebSocket();
   loadVersion();
 
-  // Default to current time
-  Timeline.setTime(Date.now() / 1000);
+  // Restore channel and time from URL params (?ch=id&t=ts)
+  const _urlParams = new URLSearchParams(location.search);
+  const _urlCh = _urlParams.get('ch');
+  const _urlTs = _urlParams.get('t');
+  if (_urlCh) {
+    for (const st of stations) {
+      const ch = st.channels.find(c => c.id === _urlCh);
+      if (ch) { selectChannel(ch, st); break; }
+    }
+  }
+  Timeline.setTime(_urlTs ? parseFloat(_urlTs) : Date.now() / 1000);
+
+  // Copy URL button
+  document.getElementById('btn-copy-url').addEventListener('click', () => {
+    const ts = Math.round(Timeline.getCenterTime());
+    const params = new URLSearchParams({ t: ts });
+    if (currentChannel) params.set('ch', currentChannel.id);
+    const url = `${location.origin}${location.pathname}?${params}`;
+    navigator.clipboard.writeText(url).catch(() => {});
+    const btn = document.getElementById('btn-copy-url');
+    const prev = btn.textContent;
+    btn.textContent = '✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = prev; btn.classList.remove('copied'); }, 1500);
+  });
 });
 
 // ── API helpers ────────────────────────────────────────────────────────────
@@ -459,18 +482,31 @@ function updateSelLabel(s, e) {
   const warn = document.getElementById('sel-warning');
 
   if (s === null && e === null) {
-    lbl.textContent = '—';
+    lbl.innerHTML = '<span class="sel-empty">—</span>';
     warn.classList.add('hidden');
     return;
   }
 
   const durSec = (s !== null && e !== null) ? Math.abs(e - s) : null;
-  const parts = [];
-  if (s !== null) parts.push(_tsToHMS(s));
-  if (e !== null) parts.push(_tsToHMS(e));
-  let txt = parts.join(' → ');
-  if (durSec !== null) txt += `  [${_secToDuration(durSec)}]`;
-  lbl.textContent = txt;
+
+  const _block = ts => ts === null ? '' :
+    `<div class="sel-block">
+       <div class="sel-date">${_tsToDate(ts)}</div>
+       <div class="sel-time">${_tsToHMS(ts)}</div>
+     </div>`;
+
+  const durHtml = durSec !== null
+    ? `<div class="sel-dur">[${_secToDuration(durSec)}]</div>` : '';
+
+  if (s !== null && e !== null) {
+    lbl.innerHTML =
+      _block(s) +
+      '<div class="sel-arrow">→</div>' +
+      _block(e) +
+      durHtml;
+  } else {
+    lbl.innerHTML = _block(s ?? e) + durHtml;
+  }
 
   if (durSec !== null && durSec > MAX_SEGMENT_SEC) {
     warn.textContent = '⚠ Слишком большой сегмент, экспорт не будет корректным';
@@ -478,6 +514,11 @@ function updateSelLabel(s, e) {
   } else {
     warn.classList.add('hidden');
   }
+}
+
+function _tsToDate(ts) {
+  const d = new Date(ts * 1000);
+  return `${_fmt2(d.getDate())}.${_fmt2(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
 function _tsToHMS(ts) {

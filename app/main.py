@@ -1,4 +1,4 @@
-"""FastAPI application — Авокадо v0.1.004"""
+"""FastAPI application — Авокадо v1.0.000"""
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +24,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "0.1.014"
+VERSION = "1.0.000"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)

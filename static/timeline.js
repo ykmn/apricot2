@@ -85,6 +85,26 @@ const Timeline = (() => {
     return 6;
   }
 
+  // ── Calendar-aware cell helpers (local timezone, exact month/day boundaries) ─
+  // Day index: days since local epoch (local midnight Jan 1 1970 = index 0)
+  function _localDayIndex(tSec) {
+    const d = new Date(tSec * 1000);
+    return Math.round(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
+  }
+  function _localDayStart(ci) {
+    const approx = new Date(ci * 86400000);
+    return new Date(approx.getFullYear(), approx.getMonth(), approx.getDate()).getTime() / 1000;
+  }
+
+  // Month index: year*12 + month (0-based)
+  function _localMonthIndex(tSec) {
+    const d = new Date(tSec * 1000);
+    return d.getFullYear() * 12 + d.getMonth();
+  }
+  function _localMonthStart(ci) {
+    return new Date(Math.floor(ci / 12), ci % 12, 1).getTime() / 1000;
+  }
+
   // ── Initialise ───────────────────────────────────────────────────────────
   function init(callbacks = {}) {
     onTimeChange = callbacks.onTimeChange || null;
@@ -203,10 +223,21 @@ const Timeline = (() => {
 
     const pxPerSec = cellWidth / timePerCell;
 
-    const leftTime   = centerTime - W / 2 / pxPerSec;
-    const rightTime  = centerTime + W / 2 / pxPerSec;
-    const firstCell  = Math.floor(leftTime / timePerCell);
-    const lastCell   = Math.ceil(rightTime / timePerCell);
+    const leftTime  = centerTime - W / 2 / pxPerSec;
+    const rightTime = centerTime + W / 2 / pxPerSec;
+
+    // Calendar-aware cell range for days/months
+    let firstCell, lastCell;
+    if (unit === 'day') {
+      firstCell = _localDayIndex(leftTime)  - 1;
+      lastCell  = _localDayIndex(rightTime) + 1;
+    } else if (unit === 'month') {
+      firstCell = _localMonthIndex(leftTime)  - 1;
+      lastCell  = _localMonthIndex(rightTime) + 1;
+    } else {
+      firstCell = Math.floor(leftTime  / timePerCell);
+      lastCell  = Math.ceil(rightTime / timePerCell);
+    }
 
     // Draw availability bands first (behind grid)
     if (availability.length) {
@@ -242,7 +273,9 @@ const Timeline = (() => {
     ctx.lineWidth = 1;
 
     for (let ci = firstCell; ci <= lastCell; ci++) {
-      const cellStart = ci * timePerCell;
+      const cellStart = unit === 'day'   ? _localDayStart(ci) :
+                        unit === 'month' ? _localMonthStart(ci) :
+                        ci * timePerCell;
       const x = Math.round(W / 2 + (cellStart - centerTime) * pxPerSec);
 
       ctx.beginPath();
