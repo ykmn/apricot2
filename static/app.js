@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       refreshPlaylistForVisible();
       _scheduleHighlight();
       if (isPlaying && !_tlAnimUpdate) _debouncedSeek(ts);
+      _updateBrandLink();
     },
     onSelChange: (s, e) => {
       updateSelLabel(s, e);
@@ -97,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   Timeline.setTime(_urlTs ? parseFloat(_urlTs) : Date.now() / 1000);
+  _updateBrandLink();
 
   // Copy URL button
   document.getElementById('btn-copy-url').addEventListener('click', () => {
@@ -279,6 +281,7 @@ function selectChannel(ch, st) {
 
   Timeline.setChannel(ch.id);
   loadPlaylist();
+  _updateBrandLink();
 }
 
 // ── Playlist ───────────────────────────────────────────────────────────────
@@ -1468,6 +1471,16 @@ async function loadVersion() {
     if (el) el.textContent = verStr;
     document.title = `${appName} v${version}`;
   } catch (e) { /* ignore */ }
+}
+
+// ── Brand link ─────────────────────────────────────────────────────────────
+function _updateBrandLink() {
+  const link = document.getElementById('app-brand-link');
+  if (!link) return;
+  const ts = Math.round(Timeline.getCenterTime());
+  const params = new URLSearchParams({ t: ts });
+  if (currentChannel) params.set('ch', currentChannel.id);
+  link.href = `${location.pathname}?${params}`;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
