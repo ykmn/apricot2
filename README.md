@@ -364,6 +364,12 @@ server:
   host: "0.0.0.0"
   port: 8765
   session_ttl: 604800      # продолжительность cookie-сессии в секундах (604800 = 7 дней)
+  log_screen: "INFO"       # минимальный уровень логов в консоль (DEBUG/INFO/WARNING/ERROR)
+  log_file: "INFO"         # минимальный уровень логов в файл logs/YYYY-mm-dd.log
+  ssl:
+    enabled: false         # true — запустить сервер по HTTPS
+    cert: "ssl/cert.pem"   # путь к сертификату (относительно корня проекта)
+    key:  "ssl/key.pem"    # путь к приватному ключу
 
 watcher:
   poll_interval: 10        # интервал опроса SMB-шар в секундах
@@ -384,13 +390,45 @@ ui:
 
 ---
 
+### HTTPS
+
+Поместите файлы сертификата и ключа в папку `ssl/` и включите HTTPS в `config/settings.yaml`:
+
+```yaml
+server:
+  ssl:
+    enabled: true
+    cert: "ssl/cert.pem"
+    key:  "ssl/key.pem"
+```
+
+Файлы `ssl/*.pem`, `ssl/*.key`, `ssl/*.crt` добавлены в `.gitignore` и **не попадают в репозиторий**.
+
+**Самоподписанный сертификат** (для тестирования):
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+```
+
+**Сертификат от Let's Encrypt** (certbot):
+```bash
+certbot certonly --standalone -d your.domain.com
+# Затем скопируйте или сделайте symlink:
+cp /etc/letsencrypt/live/your.domain.com/fullchain.pem ssl/cert.pem
+cp /etc/letsencrypt/live/your.domain.com/privkey.pem   ssl/key.pem
+```
+
+При запуске сервер автоматически переключается на `https://` и проверяет наличие файлов до старта.
+
+---
+
 ## Запуск
 
 ```bash
 python run.py
 ```
 
-Откройте браузер: **http://localhost:8765**
+Откройте браузер: **http://localhost:8765** (или **https://localhost:8765** при включённом SSL)
 
 ---
 

@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth as _auth
 
+from . import app_logger as _app_logger
 from .app_logger import get_logger
 from .audio import export_audio, set_ffmpeg_path, stream_audio
 from .config import load_playlists, load_settings, load_stations
@@ -83,6 +84,11 @@ def _load_config() -> None:
     poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
     _auth.configure(
         session_ttl=int(settings.get("server", {}).get("session_ttl", 7 * 24 * 3600)),
+    )
+    _srv = settings.get("server", {})
+    _app_logger.configure(
+        screen_level=str(_srv.get("log_screen", "INFO")),
+        file_level=str(_srv.get("log_file", "DEBUG")),
     )
     log.info(
         "Config loaded — %d station(s), %d channel(s), %d playlist(s)",
@@ -178,7 +184,7 @@ async def _log_requests(request: Request, call_next):
     path = request.url.path
     # Skip static files and WebSocket upgrades from the log
     if not path.startswith("/static") and not path.startswith("/ws"):
-        log.info(
+        log.debug(
             "%s %s%s -> %d (%.0f ms)",
             request.method,
             path,
@@ -200,6 +206,7 @@ async def startup() -> None:
              __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     log.info("*" * 72)
     log.info("Авокадо v%s starting up", VERSION)
+    _auth.load_sessions()
     asyncio.create_task(_background_startup())
 
 
@@ -252,11 +259,14 @@ async def api_login(request: Request) -> JSONResponse:
     try:
         user = _auth.authenticate(username, password)
     except _auth.AuthError as exc:
+        log.error("Auth failed for '%s': %s", username, exc)
         raise HTTPException(status_code=401, detail=str(exc))
     except RuntimeError as exc:
+        log.error("Auth service error for '%s': %s", username, exc)
         raise HTTPException(status_code=503, detail=str(exc))
 
     if not user:
+        log.error("Auth failed for '%s': no user returned", username)
         raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
 
     token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"])

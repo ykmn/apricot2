@@ -29,9 +29,10 @@ class LdapAuthError(AuthError):
     """LDAP/AD-specific authentication error with descriptive message."""
 
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
-LDAP_YAML  = CONFIG_DIR / "ldap.yaml"
-USERS_YAML = CONFIG_DIR / "users.yaml"
+CONFIG_DIR    = Path(__file__).parent.parent / "config"
+LDAP_YAML     = CONFIG_DIR / "ldap.yaml"
+USERS_YAML    = CONFIG_DIR / "users.yaml"
+SESSIONS_FILE = CONFIG_DIR / "sessions.yaml"
 
 COOKIE_NAME = "avocado_session"
 SESSION_TTL = 7 * 24 * 3600   # default: 1 week
@@ -52,6 +53,42 @@ _TAG_CFG_ERROR   = "CFG_ERROR"    # service account / config bad → stop
 # ── In-memory session store ───────────────────────────────────────────────────
 # {token: {username, is_admin, auth_type, expires}}
 _sessions: dict[str, dict] = {}
+
+
+# ── Session persistence ───────────────────────────────────────────────────────
+
+def load_sessions() -> None:
+    """Load persisted sessions from YAML on startup, discarding expired ones."""
+    if not SESSIONS_FILE.exists():
+        return
+    try:
+        with SESSIONS_FILE.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        now = time.time()
+        loaded = 0
+        for token, sess in (data.get("sessions") or {}).items():
+            if isinstance(sess, dict) and sess.get("expires", 0) > now:
+                _sessions[token] = sess
+                loaded += 1
+    except Exception:
+        pass  # non-critical — start with empty sessions
+
+
+def _save_sessions() -> None:
+    """Persist active (non-expired) sessions to YAML."""
+    _cleanup_sessions()
+    try:
+        SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with SESSIONS_FILE.open("w", encoding="utf-8") as f:
+            yaml.dump(
+                {"sessions": dict(_sessions)},
+                f,
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            )
+    except Exception:
+        pass  # non-critical
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -82,7 +119,7 @@ def create_session(username: str, is_admin: bool, auth_type: str) -> str:
         "auth_type": auth_type,
         "expires":   time.time() + SESSION_TTL,
     }
-    _cleanup_sessions()
+    _save_sessions()
     return token
 
 
@@ -92,12 +129,14 @@ def get_session(token: str) -> Optional[dict]:
         return None
     if time.time() > s["expires"]:
         _sessions.pop(token, None)
+        _save_sessions()
         return None
     return s
 
 
 def delete_session(token: str) -> None:
     _sessions.pop(token, None)
+    _save_sessions()
 
 
 def _cleanup_sessions() -> None:

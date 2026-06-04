@@ -233,6 +233,8 @@ class FileIndexManager:
         self._poll_interval: int = 10
         self.index_status: str = "idle"
         self.index_channels: list[dict] = []
+        # Channels currently known to be unreachable — used to log errors once
+        self._conn_failed: set[str] = set()
 
     # ── Setup ──────────────────────────────────────────────────────────────
 
@@ -284,13 +286,13 @@ class FileIndexManager:
                 return True, ""
             except asyncio.TimeoutError:
                 last_error = f"Timeout {int(timeout)}s"
-                log.warning("Scan timeout (%ds) for %s (attempt %d/%d)",
-                            int(timeout), idx.channel.id, attempt, max_retries)
+                log.debug("Scan timeout (%ds) for %s (attempt %d/%d)",
+                          int(timeout), idx.channel.id, attempt, max_retries)
             except Exception as exc:
                 last_error = _short_error(exc)
-                log.warning("Scan error for %s (attempt %d/%d): %s",
-                            idx.channel.id, attempt, max_retries, exc)
-        log.error("Scan failed for %s after %d attempts — skipping", idx.channel.id, max_retries)
+                log.debug("Scan error for %s (attempt %d/%d): %s",
+                          idx.channel.id, attempt, max_retries, exc)
+        # All retries exhausted — caller decides whether to log ERROR
         return False, last_error
 
     async def probe_channel(self, idx: ChannelIndex) -> bool:
@@ -404,8 +406,15 @@ class FileIndexManager:
             n_files = len(idx._files)
 
             if success:
+                if ch.id in self._conn_failed:
+                    log.info("Connection restored for channel %s", ch.id)
+                    self._conn_failed.discard(ch.id)
                 log.info("Channel %s: %d files (%d/%d)", ch.id, n_files, done, total)
                 disk_cache.save(ch.id, list(idx._files))
+            else:
+                if ch.id not in self._conn_failed:
+                    log.error("Channel %s unreachable: %s", ch.id, err_msg)
+                    self._conn_failed.add(ch.id)
 
             for entry in self.index_channels:
                 if entry["id"] == ch.id:
@@ -449,23 +458,29 @@ class FileIndexManager:
         while True:
             await asyncio.sleep(self._poll_interval)
             for idx in self._indexes.values():
+                ch_id = idx.channel.id
                 try:
                     added, removed = await loop.run_in_executor(None, idx.refresh)
+                    if ch_id in self._conn_failed:
+                        log.info("Connection restored for channel %s", ch_id)
+                        self._conn_failed.discard(ch_id)
                     if (added or removed) and self._broadcast:
-                        log.debug("Poll %s: +%d/-%d", idx.channel.id, len(added), len(removed))
+                        log.debug("Poll %s: +%d/-%d", ch_id, len(added), len(removed))
                         self._broadcast(
-                            idx.channel.id,
+                            ch_id,
                             [{"start": a.start_dt.timestamp(), "end": a.end_dt.timestamp()}
                              for a in added],
                             [{"start": r.start_dt.timestamp(), "end": r.end_dt.timestamp()}
                              for r in removed],
                         )
                         for entry in self.index_channels:
-                            if entry["id"] == idx.channel.id:
+                            if entry["id"] == ch_id:
                                 entry["files"] = len(idx._files)
-                        disk_cache.save(idx.channel.id, list(idx._files))
+                        disk_cache.save(ch_id, list(idx._files))
                 except Exception as exc:
-                    log.error("Poll error for %s: %s", idx.channel.id, exc)
+                    if ch_id not in self._conn_failed:
+                        log.error("Connection lost for channel %s: %s", ch_id, _short_error(exc))
+                        self._conn_failed.add(ch_id)
 
     def start_polling(self) -> None:
         self._task = asyncio.create_task(self._poll_loop())

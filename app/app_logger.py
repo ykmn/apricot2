@@ -81,3 +81,22 @@ def get_logger(name: str) -> logging.Logger:
         logger.addHandler(_console_handler)
         logger.propagate = False
     return logger
+
+
+def configure(screen_level: str = "INFO", file_level: str = "DEBUG") -> None:
+    """Apply log level settings loaded from settings.yaml.
+
+    screen_level — minimum level printed to stdout (e.g. "INFO", "WARNING", "ERROR")
+    file_level   — minimum level written to the daily log file
+    """
+    _lvl = logging.getLevelName  # maps "INFO" → 20, unknown → "Level %s"
+
+    s = getattr(logging, screen_level.upper(), None)
+    if not isinstance(s, int):
+        s = logging.INFO
+    _console_handler.setLevel(s)
+
+    f = getattr(logging, file_level.upper(), None)
+    if not isinstance(f, int):
+        f = logging.DEBUG
+    _file_handler.setLevel(f)

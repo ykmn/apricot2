@@ -4,6 +4,15 @@ server:
   port: 8765
   # Продолжительность cookie-сессии в секундах (по умолчанию 604800 = 7 дней)
   session_ttl: 604800
+  # Минимальный уровень логов, выводимых в консоль: DEBUG / INFO / WARNING / ERROR
+  log_screen: "DEBUG"
+  # Минимальный уровень логов, записываемых в файл logs/YYYY-mm-dd.log
+  log_file: "INFO"
+  # HTTPS (опционально). Положите cert.pem и key.pem в папку ssl/ и включите:
+  ssl:
+    enabled: false
+    cert: "ssl/cert.pem"   # путь относительно корня проекта
+    key:  "ssl/key.pem"
 
 # How often to poll SMB shares for new/deleted files (seconds)
 watcher:
