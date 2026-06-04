@@ -331,10 +331,12 @@ function renderPlaylist(entries) {
     const addBtn = document.createElement('button');
     addBtn.className = 'pl-add-btn';
     addBtn.textContent = '↑';
-    addBtn.title = I18n.t('playlist.add_to_log_title');
+    addBtn.title = I18n.t('playlist.select_title');
     addBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      addToLogFromPlaylist(e);
+      const dur = e.duration || 180;
+      Timeline.setSelStart(e.timestamp);
+      Timeline.setSelEnd(e.timestamp + dur);
     });
 
     row.appendChild(time);
@@ -383,16 +385,6 @@ function _updateCurrentEntry() {
   }
 }
 
-function addToLogFromPlaylist(entry) {
-  const dur = entry.duration || 180;
-  addLogItem({
-    channel_id:   currentChannel.id,
-    channel_name: currentChannel.name,
-    start: entry.timestamp,
-    end:   entry.timestamp + dur,
-    label: entry.title,
-  });
-}
 
 // ── Transport ──────────────────────────────────────────────────────────────
 function initTransport() {

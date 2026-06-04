@@ -87,7 +87,7 @@
     "hide_title": "Masquer"
   },
   "playlist": {
-    "add_to_log_title": "Ajouter au journal"
+    "select_title": "Sélectionner le segment sur la timeline"
   },
   "log": {
     "dl_title": "Exporter",

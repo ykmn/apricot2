@@ -87,7 +87,7 @@
     "hide_title": "Hide"
   },
   "playlist": {
-    "add_to_log_title": "Add to log list"
+    "select_title": "Select segment on timeline"
   },
   "log": {
     "dl_title": "Export",
