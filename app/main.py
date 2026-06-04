@@ -109,14 +109,17 @@ def _broadcast(channel_id: str, added: list[dict], removed: list[dict]) -> None:
     _broadcast_raw(msg)
 
 
+async def _safe_send(ws: WebSocket, msg: str) -> None:
+    """Send a WebSocket message; silently remove the client on any error."""
+    try:
+        await ws.send_text(msg)
+    except Exception:
+        ws_clients.discard(ws)
+
+
 def _broadcast_raw(msg: str) -> None:
-    dead = set()
-    for ws in ws_clients:
-        try:
-            asyncio.create_task(ws.send_text(msg))
-        except Exception:
-            dead.add(ws)
-    ws_clients.difference_update(dead)   # in-place — не создаёт локальную переменную
+    for ws in list(ws_clients):
+        asyncio.create_task(_safe_send(ws, msg))
 
 
 def _progress_callback(data: dict) -> None:
@@ -438,12 +441,7 @@ async def reload_config() -> dict:
     _load_config()
     file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
     asyncio.create_task(_background_startup())
-    msg = json.dumps({"type": "config_reloaded"})
-    for ws in list(ws_clients):
-        try:
-            await ws.send_text(msg)
-        except Exception:
-            pass
+    _broadcast_raw(json.dumps({"type": "config_reloaded"}))
     return {
         "ok":       True,
         "stations": len(stations_map),
