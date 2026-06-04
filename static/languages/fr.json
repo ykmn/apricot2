@@ -32,7 +32,7 @@
     "go_now_title": "Aller à l'instant actuel",
     "no_selection_alert": "Définissez d'abord une sélection (In et Out)",
     "no_channel_alert": "Sélectionnez d'abord une chaîne",
-    "segment_too_large_alert": "Segment trop grand; l'export risque d'être incorrect.\nSélectionnez un fragment d'au maximum 3 heures."
+    "segment_too_large_alert": "Segment trop grand; l'export risque d'être incorrect. Sélectionnez un fragment d'au maximum 3 heures."
   },
   "sel": {
     "warning": "⚠ Segment trop grand; sélectionnez un fragment d'au maximum 3 heures."
@@ -110,6 +110,27 @@
     "all_progress": "⬇ Export {n} / {total}…",
     "all_done": "✓ Export terminé ({total})",
     "all_errors": "⚠ Export : {ok} sur {total} — erreurs : {failed}"
+  },
+  "calendar": {
+    "day_0": "dimanche",
+    "day_1": "lundi",
+    "day_2": "mardi",
+    "day_3": "mercredi",
+    "day_4": "jeudi",
+    "day_5": "vendredi",
+    "day_6": "samedi",
+    "month_0": "jan",
+    "month_1": "fév",
+    "month_2": "mar",
+    "month_3": "avr",
+    "month_4": "mai",
+    "month_5": "jun",
+    "month_6": "jul",
+    "month_7": "aoû",
+    "month_8": "sep",
+    "month_9": "oct",
+    "month_10": "nov",
+    "month_11": "déc"
   },
   "login": {
     "page_title": "Avocado — Connexion",

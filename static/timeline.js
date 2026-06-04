@@ -310,14 +310,10 @@ const Timeline = (() => {
       case 'second': return _z2(d.getSeconds());
       case 'minute': return _z2(d.getMinutes());
       case 'hour':   return _z2(d.getHours());
-      case 'day': {
-        const dayNames = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
-        return `${_z2(d.getDate())} (${dayNames[d.getDay()]})`;
-      }
-      case 'month': {
-        const monthNames = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
-        return `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-      }
+      case 'day':
+        return `${_z2(d.getDate())} (${I18n.t('calendar.day_' + d.getDay())})`;
+      case 'month':
+        return `${I18n.t('calendar.month_' + d.getMonth())} ${d.getFullYear()}`;
     }
     return '';
   }

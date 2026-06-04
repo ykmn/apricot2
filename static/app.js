@@ -1450,15 +1450,31 @@ function _reapplyDynamicTexts() {
 
   // Re-render log list to update button titles
   renderLogList();
+
+  // Redraw timeline so day/month names update immediately
+  Timeline.drawAll();
+
+  // Update page title with translated app name
+  const el = document.getElementById('menu-ver');
+  if (el) {
+    const verText = el.textContent;
+    const vMatch = verText.match(/v[\d.]+/);
+    if (vMatch) {
+      const appName = I18n.t('app.title');
+      document.title = `${appName} ${vMatch[0]}`;
+      el.textContent = verText.replace(/^[^\s]+/, appName);
+    }
+  }
 }
 
 async function loadVersion() {
   try {
-    const { version, name, build_date } = await api('/api/version');
+    const { version, build_date } = await api('/api/version');
     const el = document.getElementById('menu-ver');
-    const verStr = build_date ? `${name} v${version} · ${build_date}` : `${name} v${version}`;
+    const appName = I18n.t('app.title');
+    const verStr = build_date ? `${appName} v${version} · ${build_date}` : `${appName} v${version}`;
     if (el) el.textContent = verStr;
-    document.title = `${name} v${version}`;
+    document.title = `${appName} v${version}`;
   } catch (e) { /* ignore */ }
 }
 

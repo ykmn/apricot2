@@ -32,7 +32,7 @@
     "go_now_title": "Go to current time",
     "no_selection_alert": "Set a selection with In and Out first",
     "no_channel_alert": "Select a recording channel first",
-    "segment_too_large_alert": "Segment too large — export may be incorrect.\nSelect a fragment no longer than 3 hours."
+    "segment_too_large_alert": "Segment too large — export may be incorrect. Select a fragment no longer than 3 hours."
   },
   "sel": {
     "warning": "⚠ Segment too large, export may be incorrect"
@@ -110,6 +110,27 @@
     "all_progress": "⬇ Exporting {n} / {total}…",
     "all_done": "✓ Export complete ({total})",
     "all_errors": "⚠ Export: {ok} of {total} — errors: {failed}"
+  },
+  "calendar": {
+    "day_0": "Sunday",
+    "day_1": "Monday",
+    "day_2": "Tuesday",
+    "day_3": "Wednesday",
+    "day_4": "Thursday",
+    "day_5": "Friday",
+    "day_6": "Saturday",
+    "month_0": "Jan",
+    "month_1": "Feb",
+    "month_2": "Mar",
+    "month_3": "Apr",
+    "month_4": "May",
+    "month_5": "Jun",
+    "month_6": "Jul",
+    "month_7": "Aug",
+    "month_8": "Sep",
+    "month_9": "Oct",
+    "month_10": "Nov",
+    "month_11": "Dec"
   },
   "login": {
     "page_title": "Avocado — Login",
