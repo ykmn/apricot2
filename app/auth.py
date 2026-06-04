@@ -34,7 +34,13 @@ LDAP_YAML  = CONFIG_DIR / "ldap.yaml"
 USERS_YAML = CONFIG_DIR / "users.yaml"
 
 COOKIE_NAME = "avocado_session"
-SESSION_TTL = 8 * 3600   # 8 hours
+SESSION_TTL = 7 * 24 * 3600   # default: 1 week
+
+
+def configure(session_ttl: int) -> None:
+    """Apply runtime settings loaded from settings.yaml."""
+    global SESSION_TTL
+    SESSION_TTL = session_ttl
 
 # Tags used internally to decide whether to continue to next domain
 _TAG_NOT_FOUND   = "NOT_FOUND"    # user not in this domain → try next

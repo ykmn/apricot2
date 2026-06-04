@@ -26,7 +26,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "1.0.000"
+VERSION = "1.1.000"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -81,6 +81,9 @@ def _load_config() -> None:
     all_channels = [ch for st in stations_map.values() for ch in st.channels]
     channels_map = {ch.id: ch for ch in all_channels}
     poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
+    _auth.configure(
+        session_ttl=int(settings.get("server", {}).get("session_ttl", 7 * 24 * 3600)),
+    )
     log.info(
         "Config loaded — %d station(s), %d channel(s), %d playlist(s)",
         len(stations_map), len(channels_map), len(playlists_map),

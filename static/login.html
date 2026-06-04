@@ -98,6 +98,27 @@
       white-space: pre-line;
       line-height: 1.5;
     }
+
+    .lang-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .lang-btn {
+      background: transparent;
+      border: 1px solid #2a3a5a;
+      border-radius: 4px;
+      color: #7080a0;
+      font-size: 11px;
+      padding: 3px 10px;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: 0.05em;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .lang-btn:hover  { border-color: #0ec47a; color: #0ec47a; }
+    .lang-btn.active { border-color: #0ec47a; color: #0ec47a; }
   </style>
 </head>
 <body>
@@ -110,10 +131,10 @@
 
   <form id="login-form" autocomplete="on">
     <div class="form-group">
-      <label class="form-label" for="username">Имя пользователя</label>
+      <label class="form-label" for="username" data-i18n="login.username_label">Имя пользователя</label>
       <input id="username" class="form-input" type="text"
              autocomplete="username" autofocus spellcheck="false">
-      <div class="hint">
+      <div class="hint" id="domain-hint" data-i18n-html="login.domain_hint">
         Доменные пользователи:<br>
         <strong>a.pushkin</strong> — поиск во всех настроенных доменах<br>
         <strong>CONTOSO\a.pushkin</strong> — явное указание домена (несколько доменов)<br>
@@ -121,16 +142,45 @@
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label" for="password">Пароль</label>
+      <label class="form-label" for="password" data-i18n="login.password_label">Пароль</label>
       <input id="password" class="form-input" type="password"
              autocomplete="current-password">
     </div>
-    <button id="btn-submit" class="btn-login" type="submit">Войти</button>
+    <button id="btn-submit" class="btn-login" type="submit" data-i18n="login.submit">Войти</button>
     <div id="error-msg" class="error-msg"></div>
   </form>
 
+  <div class="lang-row">
+    <button class="lang-btn" data-lang="ru">RU</button>
+    <button class="lang-btn" data-lang="en">EN</button>
+    <button class="lang-btn" data-lang="fr">FR</button>
+  </div>
+
 </div>
+<script src="/static/i18n.js"></script>
 <script>
+document.addEventListener('DOMContentLoaded', async () => {
+  await I18n.init();
+  I18n.applyToDOM();
+  _updateLangBtns();
+  document.title = I18n.t('login.page_title');
+
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await I18n.setLang(btn.dataset.lang);
+      I18n.applyToDOM();
+      _updateLangBtns();
+      document.title = I18n.t('login.page_title');
+    });
+  });
+});
+
+function _updateLangBtns() {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === I18n.getLang());
+  });
+}
+
 document.getElementById('login-form').addEventListener('submit', async e => {
   e.preventDefault();
   const username = document.getElementById('username').value.trim();
@@ -138,11 +188,11 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const errEl    = document.getElementById('error-msg');
   const btn      = document.getElementById('btn-submit');
 
-  if (!username) { errEl.textContent = 'Введите имя пользователя'; return; }
+  if (!username) { errEl.textContent = I18n.t('login.error_empty_username'); return; }
 
   errEl.textContent = '';
   btn.disabled = true;
-  btn.textContent  = 'Проверка…';
+  btn.textContent  = I18n.t('login.submit_checking');
 
   try {
     const resp = await fetch('/api/auth/login', {
@@ -156,15 +206,15 @@ document.getElementById('login-form').addEventListener('submit', async e => {
       location.href = next;
     } else {
       const data = await resp.json().catch(() => ({}));
-      errEl.textContent = data.detail || 'Неверное имя пользователя или пароль';
+      errEl.textContent = data.detail || I18n.t('login.error_wrong_credentials');
       btn.disabled = false;
-      btn.textContent = 'Войти';
+      btn.textContent = I18n.t('login.submit');
       document.getElementById('password').select();
     }
   } catch {
-    errEl.textContent = 'Ошибка подключения к серверу';
+    errEl.textContent = I18n.t('login.error_connection');
     btn.disabled = false;
-    btn.textContent = 'Войти';
+    btn.textContent = I18n.t('login.submit');
   }
 });
 </script>

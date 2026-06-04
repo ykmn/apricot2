@@ -18,34 +18,44 @@
       <span id="app-name">Авокадо</span>
     </div>
     <div id="hamburger-wrap">
-      <button id="btn-hamburger" title="Меню">☰</button>
+      <button id="btn-hamburger" data-i18n-title="menu.hamburger_title" title="Меню">☰</button>
       <div id="hamburger-menu" class="hidden">
-        <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
-        <button class="menu-item" id="menu-rescan"          data-admin-only>🔍 Пересканировать текущий канал</button>
-        <button class="menu-item" id="menu-rescan-playlogs" data-admin-only>📋 Пересканировать плейлоги станции</button>
+        <button class="menu-item" id="menu-theme" data-i18n="menu.theme_light">☀️ Светлый режим</button>
+        <div class="menu-sep"></div>
+        <div class="menu-lang-row">
+          <span class="menu-lang-label" data-i18n="menu.language">🌐 Язык</span>
+          <div class="menu-lang-btns">
+            <button class="menu-lang-btn" data-lang="ru">RU</button>
+            <button class="menu-lang-btn" data-lang="en">EN</button>
+            <button class="menu-lang-btn" data-lang="fr">FR</button>
+          </div>
+        </div>
         <div class="menu-sep" data-admin-only></div>
-        <button class="menu-item" id="menu-reload"  data-admin-only>🔄 Обновить конфигурацию</button>
+        <button class="menu-item" id="menu-rescan"          data-admin-only data-i18n="menu.rescan_channel">🔍 Пересканировать текущий канал</button>
+        <button class="menu-item" id="menu-rescan-playlogs" data-admin-only data-i18n="menu.rescan_playlogs">📋 Пересканировать плейлоги станции</button>
         <div class="menu-sep" data-admin-only></div>
-        <button class="menu-item" id="menu-restart" data-admin-only>🔁 Перезапустить сервер</button>
+        <button class="menu-item" id="menu-reload"  data-admin-only data-i18n="menu.reload_config">🔄 Обновить конфигурацию</button>
+        <div class="menu-sep" data-admin-only></div>
+        <button class="menu-item" id="menu-restart" data-admin-only data-i18n="menu.restart_server">🔁 Перезапустить сервер</button>
         <div class="menu-sep"></div>
         <span class="menu-version" id="menu-ver">v…</span>
         <div class="menu-sep hidden" id="menu-sep-logout"></div>
         <div class="menu-userinfo hidden" id="menu-userinfo"></div>
-        <button class="menu-item menu-item-danger hidden" id="menu-logout">🚪 Выйти</button>
+        <button class="menu-item menu-item-danger hidden" id="menu-logout" data-i18n="menu.logout">🚪 Выйти</button>
       </div>
     </div>
   </div>
 
   <!-- ── Channel bar (строка 2: канал + фильтр + часы) ────────────── -->
   <div id="channel-bar">
-    <div id="channel-label">Выберите канал ⬇️</div>
+    <div id="channel-label" data-i18n="channel.select_prompt">Выберите канал ⬇️</div>
     <div id="channel-controls">
       <div id="channel-selector-wrap">
         <div id="channel-input-row">
-          <input id="channel-search" type="text" placeholder="Фильтр…" autocomplete="off">
-          <button id="channel-list-btn" title="Открыть список каналов">▾</button>
-          <button id="channel-copy-btn" title="Скопировать путь к папке">⧉</button>
-          <button id="btn-copy-url" title="Скопировать ссылку на текущее время">#</button>
+          <input id="channel-search" type="text" data-i18n-ph="channel.filter_placeholder" placeholder="Фильтр…" autocomplete="off">
+          <button id="channel-list-btn" data-i18n-title="channel.open_list_title" title="Открыть список каналов">▾</button>
+          <button id="channel-copy-btn" title="Путь недоступен">⧉</button>
+          <button id="btn-copy-url" data-i18n-title="channel.copy_url_title" title="Скопировать ссылку на текущее время">#</button>
         </div>
         <div id="channel-dropdown" class="dropdown hidden"></div>
       </div>
@@ -61,7 +71,7 @@
         <span class="clock-part" id="clk-m">--</span>
         <span class="clock-sep">:</span>
         <span class="clock-part" id="clk-s">--</span>
-        <button id="btn-now" title="Перейти к текущему времени">⟳</button>
+        <button id="btn-now" data-i18n-title="transport.go_now_title" title="Перейти к текущему времени">⟳</button>
       </div>
     </div>
   </div>
@@ -78,38 +88,38 @@
   <!-- ── Transport controls ────────────────────────────────────────── -->
   <div id="transport">
     <div id="transport-left">
-      <button id="btn-play"  class="btn-transport" title="Воспроизвести / Пауза">▶</button>
-      <button id="btn-mark-in"  class="btn-mark" title="Установить начало сегмента">In</button>
-      <button id="btn-mark-out" class="btn-mark" title="Установить конец сегмента">Out</button>
+      <button id="btn-play"  class="btn-transport" data-i18n-title="transport.play_title" title="Воспроизвести / Пауза">▶</button>
+      <button id="btn-mark-in"  class="btn-mark" data-i18n-title="transport.mark_in_title"  title="Установить начало сегмента">In</button>
+      <button id="btn-mark-out" class="btn-mark" data-i18n-title="transport.mark_out_title" title="Установить конец сегмента">Out</button>
       <div id="sel-label"><span class="sel-empty">—</span></div>
       <span id="sel-warning" class="hidden"></span>
     </div>
     <div id="transport-right">
-      <button id="btn-add-log" class="btn-action">Добавить сегмент</button>
-      <button id="btn-clear-sel" class="btn-danger">Очистить выделение</button>
+      <button id="btn-add-log" class="btn-action" data-i18n="transport.add_segment">Добавить сегмент</button>
+      <button id="btn-clear-sel" class="btn-danger" data-i18n="transport.clear_selection">Очистить выделение</button>
     </div>
   </div>
 
   <!-- ── Index status bar ────────────────────────────────────────────── -->
   <div id="status-bar" class="status-scanning">
     <span id="status-icon">⏳</span>
-    <span id="status-text">Инициализация…</span>
+    <span id="status-text" data-i18n="status.init">Инициализация…</span>
     <span id="status-detail"></span>
-    <span id="play-loading" class="hidden">⌛ Буферизация…</span>
-    <span id="status-close" title="Скрыть">✕</span>
+    <span id="play-loading" class="hidden" data-i18n="status.buffering">⌛ Буферизация…</span>
+    <span id="status-close" data-i18n-title="btn.hide_title" title="Скрыть">✕</span>
   </div>
 
   <!-- ── Playlog status bar ──────────────────────────────────────── -->
   <div id="playlog-bar" class="hidden">
     <span id="plbar-icon"></span>
-    <span id="plbar-text">Проверка плейлогов…</span>
+    <span id="plbar-text" data-i18n="playlog.checking">Проверка плейлогов…</span>
     <span id="plbar-detail"></span>
-    <span id="plbar-close" title="Скрыть">✕</span>
+    <span id="plbar-close" data-i18n-title="btn.hide_title" title="Скрыть">✕</span>
   </div>
 
   <!-- ── Channel diagnostics popover ──────────────────────────────── -->
   <div id="diag-popover" class="hidden">
-    <div id="diag-title">Недоступные каналы</div>
+    <div id="diag-title" data-i18n="diag.title">Недоступные каналы</div>
     <div id="diag-list"></div>
   </div>
 
@@ -119,7 +129,7 @@
     <!-- Playlist -->
     <div id="playlist-panel" class="panel">
       <div class="panel-header">
-        <span>ПЛЕЙЛОГ</span>
+        <span data-i18n="panel.playlog">ПЛЕЙЛОГ</span>
       </div>
       <div id="playlist-list" class="scrollable-list"></div>
     </div>
@@ -127,10 +137,10 @@
     <!-- Log-list -->
     <div id="loglist-panel" class="panel">
       <div class="panel-header">
-        <span>ВЫБРАННЫЕ СЕГМЕНТЫ</span>
+        <span data-i18n="panel.segments">ВЫБРАННЫЕ СЕГМЕНТЫ</span>
         <div>
-          <button id="btn-export-all" class="btn-green btn-sm">Скачать всё</button>
-          <button id="btn-clear-log"  class="btn-danger btn-sm">Очистить</button>
+          <button id="btn-export-all" class="btn-green btn-sm" data-i18n="btn.download_all">Скачать всё</button>
+          <button id="btn-clear-log"  class="btn-danger btn-sm" data-i18n="btn.clear">Очистить</button>
         </div>
       </div>
       <div id="loglist-items" class="scrollable-list"></div>
@@ -141,22 +151,22 @@
   <!-- ── Export modal ─────────────────────────────────────────────── -->
   <div id="export-modal" class="modal hidden">
     <div class="modal-box">
-      <h3>Экспорт сегмента</h3>
-      <label>Формат:
+      <h3 data-i18n="export.title">Экспорт сегмента</h3>
+      <label><span data-i18n="export.format_label">Формат:</span>
         <select id="exp-format">
           <option value="mp3">MP3</option>
           <option value="wav">WAV PCM</option>
           <option value="aac">AAC</option>
         </select>
       </label>
-      <label>Частота дискретизации:
+      <label><span data-i18n="export.samplerate_label">Частота дискретизации:</span>
         <select id="exp-samplerate">
           <option value="32000">32 000 Гц</option>
           <option value="44100" selected>44 100 Гц</option>
           <option value="48000">48 000 Гц</option>
         </select>
       </label>
-      <label id="exp-bitrate-row">Битрейт:
+      <label id="exp-bitrate-row"><span data-i18n="export.bitrate_label">Битрейт:</span>
         <select id="exp-bitrate">
           <option value="320k">320 kbps</option>
           <option value="192k" selected>192 kbps</option>
@@ -164,12 +174,12 @@
           <option value="64k">64 kbps</option>
         </select>
       </label>
-      <div id="exp-wav-note"  class="hidden" style="font-size:11px;color:var(--text2)">WAV экспортируется как PCM 16-bit без сжатия</div>
-      <div id="exp-copy-note" class="hidden" style="font-size:11px;color:var(--accent2)">⚡ Оригинальный формат канала — экспорт без перекодирования</div>
-      <div id="export-progress" class="hidden">Экспорт…</div>
+      <div id="exp-wav-note"  class="hidden" style="font-size:11px;color:var(--text2)" data-i18n="export.wav_note">WAV экспортируется как PCM 16-bit без сжатия</div>
+      <div id="exp-copy-note" class="hidden" style="font-size:11px;color:var(--accent2)" data-i18n="export.copy_note">⚡ Оригинальный формат канала — экспорт без перекодирования</div>
+      <div id="export-progress" class="hidden"></div>
       <div class="modal-buttons">
-        <button id="exp-ok"     class="btn-green">Экспортировать</button>
-        <button id="exp-cancel" class="btn-danger">Отмена</button>
+        <button id="exp-ok"     class="btn-green" data-i18n="btn.export">Экспортировать</button>
+        <button id="exp-cancel" class="btn-danger" data-i18n="btn.cancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -179,6 +189,7 @@
 
 </div>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/timeline.js"></script>
 <script src="/static/app.js"></script>
 </body>

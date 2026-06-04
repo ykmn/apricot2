@@ -2,16 +2,22 @@
 server:
   host: "0.0.0.0"
   port: 8765
+  # Продолжительность cookie-сессии в секундах (по умолчанию 604800 = 7 дней)
+  session_ttl: 604800
 
 # How often to poll SMB shares for new/deleted files (seconds)
 watcher:
-  poll_interval: 10
+  poll_interval: 20
 
 # Export settings
 # Аудиофайлы сохраняются в папку export/ в корне проекта (создаётся автоматически)
 export:
   default_format: "mp3"
   default_bitrate: "192k"
+  # Срок хранения готовых экспортированных файлов (дней). По истечении удаляются автоматически.
+  retention_days: 3
+  # Время суток для ежедневной очистки папки export (формат HH:MM)
+  cleanup_time: "03:00"
 
 # ffmpeg binary path (leave empty to use system PATH)
 ffmpeg_path: "ffmpeg"

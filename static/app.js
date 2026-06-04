@@ -56,6 +56,9 @@ function _applyAuthUI() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await I18n.init();
+  I18n.applyToDOM();
+
   await initAuth();
 
   Timeline.init({
@@ -182,7 +185,7 @@ function initChannelSearch() {
   copy.addEventListener('click', async () => {
     const path = _channelFolderPath(currentChannel || {});
     if (!path) {
-      alert('Путь к папке недоступен для этого канала.');
+      alert(I18n.t('channel.path_unavailable_alert'));
       return;
     }
     // Try modern clipboard API, fall back to execCommand
@@ -206,7 +209,7 @@ function initChannelSearch() {
       copy.textContent = '✓';
       setTimeout(() => { copy.textContent = prev; }, 1500);
     } else {
-      prompt('Скопируйте путь вручную:', path);
+      prompt(I18n.t('channel.copy_manual_prompt'), path);
     }
   });
   let _ddHideTimer = null;
@@ -260,10 +263,12 @@ function selectChannel(ch, st) {
   const lbl  = document.getElementById('channel-label');
   const copy = document.getElementById('channel-copy-btn');
   inp.value = '';
-  inp.placeholder = 'Фильтр…';
+  inp.placeholder = I18n.t('channel.filter_placeholder');
   lbl.textContent = ch.name;
   const folderPath = _channelFolderPath(ch);
-  copy.title = folderPath ? `Скопировать путь: ${folderPath}` : 'Путь недоступен';
+  copy.title = folderPath
+    ? I18n.t('channel.copy_path_title_fmt', { path: folderPath })
+    : I18n.t('channel.copy_path_unavailable');
   copy.disabled = !folderPath;
 
   // Mark active
@@ -326,7 +331,7 @@ function renderPlaylist(entries) {
     const addBtn = document.createElement('button');
     addBtn.className = 'pl-add-btn';
     addBtn.textContent = '↑';
-    addBtn.title = 'Добавить в лог-лист';
+    addBtn.title = I18n.t('playlist.add_to_log_title');
     addBtn.addEventListener('click', ev => {
       ev.stopPropagation();
       addToLogFromPlaylist(e);
@@ -398,16 +403,16 @@ function initTransport() {
   document.getElementById('btn-add-log').addEventListener('click', () => {
     const { start, end } = Timeline.getSelection();
     if (start === null || end === null) {
-      alert('Сначала выделите фрагмент кнопками In и Out');
+      alert(I18n.t('transport.no_selection_alert'));
       return;
     }
     if (!currentChannel) {
-      alert('Выберите канал записи');
+      alert(I18n.t('transport.no_channel_alert'));
       return;
     }
     const durSec = Math.abs(end - start);
     if (durSec > MAX_SEGMENT_SEC) {
-      alert('Слишком большой сегмент — экспорт не будет корректным.\nВыделите фрагмент не длиннее 3 часов.');
+      alert(I18n.t('transport.segment_too_large_alert'));
       return;
     }
     addLogItem({
@@ -548,7 +553,7 @@ function updateSelLabel(s, e) {
   }
 
   if (durSec !== null && durSec > MAX_SEGMENT_SEC) {
-    warn.textContent = '⚠ Слишком большой сегмент, экспорт не будет корректным';
+    warn.textContent = I18n.t('sel.warning');
     warn.classList.remove('hidden');
   } else {
     warn.classList.add('hidden');
@@ -633,14 +638,14 @@ function renderLogList() {
     const dlBtn = document.createElement('button');
     dlBtn.className = 'log-btn log-btn-dl';
     dlBtn.textContent = '↓';
-    dlBtn.title = 'Экспортировать';
+    dlBtn.title = I18n.t('log.dl_title');
     dlBtn.addEventListener('click', () => openExportModal(item));
 
     // Navigate button
     const navBtn = document.createElement('button');
     navBtn.className = 'log-btn log-btn-nav';
     navBtn.textContent = '↗';
-    navBtn.title = 'Перейти к фрагменту';
+    navBtn.title = I18n.t('log.nav_title');
     navBtn.addEventListener('click', () => {
       Timeline.setTime(item.start);
       // Also restore selection
@@ -652,7 +657,7 @@ function renderLogList() {
     const delBtn = document.createElement('button');
     delBtn.className = 'log-btn log-btn-del';
     delBtn.textContent = '✕';
-    delBtn.title = 'Удалить из лог-листа';
+    delBtn.title = I18n.t('log.del_title');
     delBtn.addEventListener('click', () => {
       logItems = logItems.filter(i => i.id !== item.id);
       _saveLogItems();
@@ -776,18 +781,18 @@ async function doExport() {
   if (!exportTarget) return;
   const prog = document.getElementById('export-progress');
   prog.classList.remove('hidden');
-  prog.textContent = 'Экспорт…';
+  prog.textContent = I18n.t('export.in_progress');
   try {
     const result = await api('/api/audio/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(_buildExportBody(exportTarget)),
     });
-    prog.textContent = 'Готово! Скачивание…';
+    prog.textContent = I18n.t('export.done');
     _triggerDownload(result.download_url, result.filename);
     setTimeout(() => document.getElementById('export-modal').classList.add('hidden'), 1200);
   } catch (e) {
-    prog.textContent = 'Ошибка экспорта: ' + e.message;
+    prog.textContent = I18n.t('export.error', { msg: e.message });
   }
 }
 
@@ -797,14 +802,14 @@ async function exportAll() {
   const el = document.getElementById('play-loading');
   let failed = 0;
   for (let i = 0; i < total; i++) {
-    el.textContent = `⬇ Экспорт ${i + 1} / ${total}…`;
+    el.textContent = I18n.t('export.all_progress', { n: i + 1, total });
     el.classList.remove('hidden');
     const ok = await doExportItem(logItems[i]);
     if (!ok) failed++;
   }
   el.textContent = failed
-    ? `⚠ Экспорт: ${total - failed} из ${total} — ошибки: ${failed}`
-    : `✓ Экспорт завершён (${total})`;
+    ? I18n.t('export.all_errors', { ok: total - failed, total, failed })
+    : I18n.t('export.all_done', { total });
   setTimeout(() => el.classList.add('hidden'), 3000);
 }
 
@@ -869,9 +874,8 @@ function initClockControls() {
       _adjustTime(unit, -1);
     });
 
-    // Visual feedback: cursor pointer + title
     el.style.cursor = 'pointer';
-    el.title = 'ЛКМ — увеличить, ПКМ — уменьшить';
+    el.title = I18n.t('clock.adjust_title');
   });
 }
 
@@ -892,21 +896,18 @@ function _adjustTime(unit, dir) {
 
 // ── Hotkeys ────────────────────────────────────────────────────────────────
 // 0        — Play / Pause
-// [        — Mark In (начало выделения)
-// ]        — Mark Out (конец выделения)
-// S        — Фокус на поле выбора канала
-// + / =    — Увеличить единицу времени под курсором на таймлайне
-// -        — Уменьшить единицу времени под курсором на таймлайне
+// [        — Mark In
+// ]        — Mark Out
+// S        — Focus channel search
+// + / =    — Increment hovered timeline unit
+// -        — Decrement hovered timeline unit
 function initHotkeys() {
-  // Единицы таймлайна → единицы _adjustTime (совпадают)
   const TIMELINE_UNITS = new Set(['second', 'minute', 'hour', 'day', 'month']);
 
   document.addEventListener('keydown', e => {
-    // Не перехватывать клавиши, когда фокус в поле ввода или textarea
     const tag = document.activeElement && document.activeElement.tagName;
     const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 
-    // S без модификаторов — фокус на поиске канала (работает даже из input)
     if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey && !isInput) {
       e.preventDefault();
       const inp = document.getElementById('channel-search');
@@ -914,7 +915,7 @@ function initHotkeys() {
       return;
     }
 
-    if (isInput) return;   // остальные горячие клавиши — только вне полей ввода
+    if (isInput) return;
 
     switch (e.key) {
       case '0':
@@ -933,7 +934,7 @@ function initHotkeys() {
         break;
 
       case '+':
-      case '=': {   // '=' — это '+' без Shift на EN-раскладке
+      case '=': {
         e.preventDefault();
         const unit = Timeline.getHoveredUnit();
         if (unit && TIMELINE_UNITS.has(unit)) _adjustTime(unit, +1);
@@ -967,7 +968,7 @@ function initStatusBar() {
   fetch('/api/index_status')
     .then(r => r.json())
     .then(data => _applyIndexStatus(data))
-    .catch(() => _setStatus('error', '⚠', 'Не удалось получить статус индекса'));
+    .catch(() => _setStatus('error', '⚠', I18n.t('status.init')));
 
   // Fetch last playlog check result (may be empty if check not done yet)
   fetch('/api/playlog_status')
@@ -982,22 +983,23 @@ function _applyIndexStatus(data) {
 
   if (data.status === 'ready' || data.status === 'idle') {
     const failedN   = _statusChannels.filter(c => c.failed).length;
-    const failedStr = failedN ? ` · ⚠ ${failedN} недоступн.` : '';
+    const failedStr = failedN ? I18n.t('status.unavailable_count', { n: failedN }) : '';
     _setStatus('ready', '✓',
-      `Индекс готов · ${data.total_files} файлов · ${data.total_channels} каналов${failedStr}`);
+      I18n.t('status.index_ready', { files: data.total_files, channels: data.total_channels, failed: failedStr }));
     if (failedN) _makeDiagLink();
   } else if (data.status === 'scanning') {
     const done  = data.done_channels;
     const total = data.total_channels;
     const active = _statusChannels.find(c => !c.done);
     const label  = active ? ` · ${_displayName(active.name)}` : '';
-    _setStatus('scanning', '⟳', `Обновление (${done}/${total})${label}…`);
+    _setStatus('scanning', '⟳',
+      I18n.t('status.index_scanning', { done, total, label }));
   }
 }
 
 function _handleCacheLoaded(msg) {
   _setStatus('scanning', '📦',
-    `Кэш загружен · ${msg.total_files} файлов · обновление в фоне…`);
+    I18n.t('status.cache_loaded', { files: msg.total_files }));
   // Index just became available from cache — re-fetch without clearing existing data
   if (currentChannel) Timeline.refreshAvailability();
 }
@@ -1006,7 +1008,7 @@ function _handleIndexScanning(msg) {
   _statusChannels.forEach(c => { c.rescanning = (c.id === msg.channel_id); });
   _rebuildDots();
   _setStatus('scanning', '⟳',
-    `Обновление (${msg.done}/${msg.total}) · ${_displayName(msg.channel_name)}…`);
+    I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label: ` · ${_displayName(msg.channel_name)}` }));
 }
 
 function _displayName(fullName) {
@@ -1023,7 +1025,7 @@ function _handleIndexProgress(msg) {
 
   if (msg.rescan && msg.done === 1) {
     _setStatus('ready', '✓',
-      `Пересканирование завершено · ${_displayName(msg.channel_name)} · ${msg.files} файлов`);
+      I18n.t('status.rescan_done', { name: _displayName(msg.channel_name), files: msg.files }));
     if (currentChannel && currentChannel.id === msg.channel_id) {
       Timeline.setChannel(currentChannel.id);
     }
@@ -1033,8 +1035,8 @@ function _handleIndexProgress(msg) {
   const nextCh = _statusChannels.find(c => !c.done);
   const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
   _setStatus('scanning', '⟳',
-    `Обновление (${msg.done}/${msg.total})${label}…`,
-    `готово: ${_displayName(msg.channel_name)} · ${msg.files} файлов`);
+    I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label }),
+    I18n.t('status.detail_done', { name: _displayName(msg.channel_name), files: msg.files }));
 }
 
 function _handleIndexError(msg) {
@@ -1045,8 +1047,8 @@ function _handleIndexError(msg) {
   const nextCh = _statusChannels.find(c => !c.done);
   const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
   _setStatus('scanning', '⟳',
-    `Обновление (${msg.done}/${msg.total})${label}…`,
-    `⚠ недоступен: ${_displayName(msg.channel_name)}`);
+    I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label }),
+    I18n.t('status.detail_unavailable', { name: _displayName(msg.channel_name) }));
 }
 
 function _handleIndexDone(msg) {
@@ -1055,9 +1057,9 @@ function _handleIndexDone(msg) {
   // Re-fetch availability now that all scanning is done (without clearing existing data)
   if (currentChannel) Timeline.refreshAvailability();
   const failedN   = _statusChannels.filter(c => c.failed).length;
-  const failedStr = failedN ? ` · ⚠ ${failedN} недоступн.` : '';
+  const failedStr = failedN ? I18n.t('status.unavailable_count', { n: failedN }) : '';
   _setStatus('ready', '✓',
-    `Индекс готов · ${msg.total_files} файлов · ${msg.channels} каналов${failedStr}`);
+    I18n.t('status.index_ready', { files: msg.total_files, channels: msg.channels, failed: failedStr }));
   if (failedN) _makeDiagLink();
 }
 
@@ -1069,7 +1071,7 @@ function _handlePlaylogChecking() {
   _plSources = _plSources.map(s => ({ ...s, checking: true }));
   if (!_plSources.length) {
     document.getElementById('plbar-icon').textContent   = '⟳';
-    document.getElementById('plbar-text').textContent   = 'Проверка плейлогов…';
+    document.getElementById('plbar-text').textContent   = I18n.t('playlog.checking');
     document.getElementById('plbar-detail').textContent = '';
   }
   _rebuildPlDots();
@@ -1102,7 +1104,7 @@ function _applyPlaylogStatus(playlogs) {
   }
   if (failed === 0) {
     document.getElementById('plbar-icon').textContent   = '✓';
-    document.getElementById('plbar-text').textContent   = `Плейлоги доступны · ${total} источн.`;
+    document.getElementById('plbar-text').textContent   = I18n.t('playlog.available', { n: total });
     document.getElementById('plbar-detail').textContent = '';
     // Auto-clear text after 5s (bar stays, dots remain)
     setTimeout(() => {
@@ -1113,7 +1115,7 @@ function _applyPlaylogStatus(playlogs) {
   } else {
     document.getElementById('plbar-icon').textContent   = '⚠';
     document.getElementById('plbar-text').textContent   =
-      `Плейлоги: ${failed} из ${total} недоступн.`;
+      I18n.t('playlog.unavailable', { failed, total });
     document.getElementById('plbar-detail').textContent = '';
   }
 }
@@ -1134,10 +1136,10 @@ function _rebuildPlDots() {
     else if (s.ok)    dot.className = 'status-dot done';
     else              dot.className = 'status-dot failed';
 
-    const label = `${_displayName(s.pl_name)} (приор. ${s.priority})`;
-    dot.title = s.ok       ? `${label}: доступен`
-              : s.checking ? `${label}: проверяется…`
-              : `${label}: недоступен — нажмите для диагностики`;
+    const label = `${_displayName(s.pl_name)} (${I18n.t('dot.files', { n: s.priority })})`;
+    dot.title = s.ok       ? `${label}: ${I18n.t('dot.available')}`
+              : s.checking ? `${label}: ${I18n.t('dot.checking')}`
+              : `${label}: ${I18n.t('dot.unavailable_click')}`;
 
     if (!s.ok && !s.checking) {
       dot.style.cursor = 'pointer';
@@ -1191,9 +1193,9 @@ function _rebuildDots() {
     else if (c.failed) cls += ' failed';
     else if (c.done)   cls += ' done';
     dot.className = cls;
-    dot.title = c.failed     ? `${c.name}: недоступен — нажмите для диагностики`
-              : c.rescanning ? `${c.name}: обновляется…`
-              : `${c.name}: ${c.files} файлов`;
+    dot.title = c.failed     ? `${c.name}: ${I18n.t('dot.unavailable_click')}`
+              : c.rescanning ? `${c.name}: ${I18n.t('dot.updating')}`
+              : `${c.name}: ${I18n.t('dot.files', { n: c.files })}`;
     if (c.failed) {
       dot.style.cursor = 'pointer';
       dot.addEventListener('click', e => { e.stopPropagation(); _showDiagPopover(dot, [c]); });
@@ -1205,11 +1207,11 @@ function _rebuildDots() {
 }
 
 function _makeDiagLink() {
-  // Replace "N недоступн." text in status with a clickable span
   const textEl = document.getElementById('status-text');
   if (!textEl) return;
   const html = textEl.textContent;
-  const match = html.match(/(⚠\s*\d+\s*недоступн\.)/);
+  // Match "⚠ N unavailable/недоступн./indisponible(s)" pattern
+  const match = html.match(/(⚠\s*\d+\s*\S+\.?)/);
   if (!match) return;
   textEl.innerHTML = html.replace(match[0],
     `<span class="diag-link" style="cursor:pointer;text-decoration:underline dotted">${match[0]}</span>`);
@@ -1237,7 +1239,7 @@ function _showDiagPopover(anchor, channels) {
       err.textContent = c.error;
     } else {
       err.className = 'diag-no-error';
-      err.textContent = 'причина неизвестна';
+      err.textContent = I18n.t('diag.unknown_reason');
     }
     item.appendChild(err);
     list.appendChild(item);
@@ -1311,7 +1313,9 @@ function initHamburgerMenu() {
     const html = document.documentElement;
     const isDark = html.getAttribute('data-theme') !== 'light';
     html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    themeBtn.textContent = isDark ? '🌙 Тёмный режим' : '☀️ Светлый режим';
+    themeBtn.textContent = isDark
+      ? I18n.t('menu.theme_dark')
+      : I18n.t('menu.theme_light');
     localStorage.setItem('avocado-theme', isDark ? 'light' : 'dark');
     Timeline.drawAll();   // repaint canvases with new colors
     menu.classList.add('hidden');
@@ -1321,24 +1325,34 @@ function initHamburgerMenu() {
   const saved = localStorage.getItem('avocado-theme');
   if (saved) {
     document.documentElement.setAttribute('data-theme', saved);
-    themeBtn.textContent = saved === 'light' ? '🌙 Тёмный режим' : '☀️ Светлый режим';
+    themeBtn.textContent = saved === 'light'
+      ? I18n.t('menu.theme_dark')
+      : I18n.t('menu.theme_light');
   }
+
+  // Language buttons
+  document.querySelectorAll('.menu-lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === I18n.getLang());
+    btn.addEventListener('click', async () => {
+      await I18n.setLang(btn.dataset.lang);
+      // Re-apply dynamic texts that aren't data-i18n attributes
+      _reapplyDynamicTexts();
+    });
+  });
 
   // Rescan current channel
   document.getElementById('menu-rescan').addEventListener('click', async () => {
     menu.classList.add('hidden');
     if (!currentChannel) {
-      _setStatus('error', '⚠', 'Сначала выберите канал');
-      /* reload done */
+      _setStatus('error', '⚠', I18n.t('status.no_channel'));
       return;
     }
-    _setStatus('scanning', '⏳', `Пересканирование · ${_displayName(currentChannel.name)}…`);
+    _setStatus('scanning', '⏳', I18n.t('status.rescanning', { name: _displayName(currentChannel.name) }));
     try {
       await api(`/api/rescan/${currentChannel.id}`, { method: 'POST' });
       // Result arrives via WebSocket (index_progress / index_error)
     } catch (e) {
-      _setStatus('error', '⚠', `Ошибка пересканирования: ${e.message}`);
-      /* error shown */
+      _setStatus('error', '⚠', I18n.t('status.rescan_error', { msg: e.message }));
     }
   });
 
@@ -1347,12 +1361,12 @@ function initHamburgerMenu() {
     menu.classList.add('hidden');
     if (!currentChannel) {
       document.getElementById('plbar-icon').textContent = '⚠';
-      document.getElementById('plbar-text').textContent = 'Сначала выберите канал';
+      document.getElementById('plbar-text').textContent = I18n.t('playlog.no_channel');
       document.getElementById('playlog-bar').classList.remove('hidden');
       return;
     }
     document.getElementById('plbar-icon').textContent   = '⟳';
-    document.getElementById('plbar-text').textContent   = 'Пересканирование плейлогов…';
+    document.getElementById('plbar-text').textContent   = I18n.t('playlog.rescanning');
     document.getElementById('plbar-detail').textContent = '';
     document.getElementById('playlog-bar').classList.remove('hidden');
     try {
@@ -1360,32 +1374,32 @@ function initHamburgerMenu() {
       // Result arrives via WS (playlog_checking → playlog_status)
     } catch (e) {
       document.getElementById('plbar-icon').textContent = '⚠';
-      document.getElementById('plbar-text').textContent = `Ошибка: ${e.message}`;
+      document.getElementById('plbar-text').textContent = I18n.t('playlog.rescan_error', { msg: e.message });
     }
   });
 
   // Reload config
   document.getElementById('menu-reload').addEventListener('click', async () => {
     menu.classList.add('hidden');
-    _setStatus('scanning', '⏳', 'Обновление конфигурации…');
+    _setStatus('scanning', '⏳', I18n.t('status.reload_config'));
     try {
       const res = await api('/api/reload', { method: 'POST' });
       await loadStations();
       buildChannelDropdown();
       _setStatus('ready', '✓',
-        `Конфигурация обновлена · ${res.stations} ст. · ${res.channels} кан. · ${res.playlogs} плейл.`);
+        I18n.t('status.config_reloaded', { stations: res.stations, channels: res.channels, playlogs: res.playlogs }));
     } catch (e) {
-      _setStatus('error', '⚠', `Ошибка обновления конфигурации: ${e.message}`);
+      _setStatus('error', '⚠', I18n.t('status.config_error', { msg: e.message }));
     }
   });
 
   document.getElementById('menu-restart').addEventListener('click', async () => {
     menu.classList.add('hidden');
-    if (!confirm('Перезапустить сервер?\nСтраница обновится автоматически через несколько секунд.')) return;
+    if (!confirm(I18n.t('status.restart_confirm'))) return;
     try {
       await api('/api/restart', { method: 'POST' });
     } catch { /* server going down — expected */ }
-    _setStatus('scanning', '⏳', 'Перезапуск сервера…');
+    _setStatus('scanning', '⏳', I18n.t('status.restarting'));
     // Poll until server is back, then reload
     const _tryReload = () => {
       fetch('/api/version').then(r => {
@@ -1402,6 +1416,40 @@ function initHamburgerMenu() {
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* ok */ }
     location.href = '/login';
   });
+}
+
+function _reapplyDynamicTexts() {
+  // Re-apply texts that are set dynamically and may not have data-i18n attrs
+
+  // Theme button
+  const themeBtn = document.getElementById('menu-theme');
+  if (themeBtn) {
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    themeBtn.textContent = isDark ? I18n.t('menu.theme_light') : I18n.t('menu.theme_dark');
+  }
+
+  // Channel label — only reset to prompt if no channel selected
+  if (!currentChannel) {
+    const lbl = document.getElementById('channel-label');
+    if (lbl) lbl.textContent = I18n.t('channel.select_prompt');
+  }
+
+  // Copy button title
+  const copy = document.getElementById('channel-copy-btn');
+  if (copy && currentChannel) {
+    const folderPath = _channelFolderPath(currentChannel);
+    copy.title = folderPath
+      ? I18n.t('channel.copy_path_title_fmt', { path: folderPath })
+      : I18n.t('channel.copy_path_unavailable');
+  }
+
+  // Clock part titles
+  document.querySelectorAll('#clk-day, #clk-month, #clk-year, #clk-h, #clk-m, #clk-s').forEach(el => {
+    el.title = I18n.t('clock.adjust_title');
+  });
+
+  // Re-render log list to update button titles
+  renderLogList();
 }
 
 async function loadVersion() {

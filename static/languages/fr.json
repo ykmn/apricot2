@@ -1,0 +1,125 @@
+{
+  "app": {
+    "title": "Avocado"
+  },
+  "menu": {
+    "hamburger_title": "Menu",
+    "theme_light": "☀️ Thème clair",
+    "theme_dark": "🌙 Thème sombre",
+    "rescan_channel": "🔍 Rescanner la chaîne actuelle",
+    "rescan_playlogs": "📋 Rescanner les journaux de la station",
+    "reload_config": "🔄 Recharger la configuration",
+    "restart_server": "🔁 Redémarrer le serveur",
+    "logout": "🚪 Se déconnecter",
+    "language": "🌐 Langue"
+  },
+  "channel": {
+    "select_prompt": "Sélectionnez une chaîne ⬇️",
+    "filter_placeholder": "Filtrer...",
+    "open_list_title": "Ouvrir la liste des chaînes",
+    "copy_path_title_fmt": "Copier le chemin: {path}",
+    "copy_path_unavailable": "Chemin indisponible",
+    "copy_url_title": "Copier le lien vers l'instant actuel",
+    "path_unavailable_alert": "Le chemin du dossier est indisponible pour cette chaîne.",
+    "copy_manual_prompt": "Copiez le chemin manuellement :"
+  },
+  "transport": {
+    "play_title": "Lecture/Pause",
+    "mark_in_title": "Définir le début du segment",
+    "mark_out_title": "Définir la fin du segment",
+    "add_segment": "Ajouter un segment",
+    "clear_selection": "Effacer la sélection",
+    "go_now_title": "Aller à l'instant actuel",
+    "no_selection_alert": "Définissez d'abord une sélection (In et Out)",
+    "no_channel_alert": "Sélectionnez d'abord une chaîne",
+    "segment_too_large_alert": "Segment trop grand; l'export risque d'être incorrect.\nSélectionnez un fragment d'au maximum 3 heures."
+  },
+  "sel": {
+    "warning": "⚠ Segment trop grand; sélectionnez un fragment d'au maximum 3 heures."
+  },
+  "status": {
+    "init": "Initialisation…",
+    "buffering": "⌛ Mise en mémoire tampon…",
+    "index_ready": "Index prêt · {files} fichiers · {channels} chaînes{failed}",
+    "index_scanning": "Mise à jour ({done}/{total}){label}…",
+    "cache_loaded": "Cache chargé · {files} fichiers · Mise à jour en arrière-plan…",
+    "rescan_done": "Rescan terminé · {name} · {files} fichiers",
+    "unavailable_count": " · ⚠ {n} indisponible(s)",
+    "detail_done": "terminé : {name} · {files} fichiers",
+    "detail_unavailable": "⚠ indisponible : {name}",
+    "no_channel": "Sélectionnez d'abord une chaîne",
+    "rescanning": "Rescan en cours · {name}…",
+    "rescan_error": "Erreur de rescan : {msg}",
+    "reload_config": "Rechargement de la configuration…",
+    "config_reloaded": "Configuration rechargée · {stations} stations · {channels} chaînes · {playlogs} journaux.",
+    "config_error": "Erreur de rechargement : {msg}",
+    "restart_confirm": "Redémarrer le serveur ?\nLa page sera rechargée automatiquement dans quelques secondes.",
+    "restarting": "Redémarrage du serveur…"
+  },
+  "playlog": {
+    "checking": "Vérification des journaux…",
+    "available": "Journaux disponibles · {n} source(s)",
+    "unavailable": "Journaux : {failed} sur {total} indisponible(s)",
+    "no_channel": "Sélectionnez d'abord une chaîne",
+    "rescanning": "Rescan des journaux…",
+    "rescan_error": "Erreur : {msg}"
+  },
+  "dot": {
+    "available": "disponible",
+    "checking": "vérification…",
+    "unavailable_click": "indisponible — cliquez pour le diagnostic",
+    "updating": "mise à jour…",
+    "files": "{n} fichiers"
+  },
+  "diag": {
+    "title": "Chaînes indisponibles",
+    "unknown_reason": "raison inconnue"
+  },
+  "panel": {
+    "playlog": "JOURNAL",
+    "segments": "SEGMENTS SÉLECTIONNÉS"
+  },
+  "btn": {
+    "download_all": "Tout télécharger",
+    "clear": "Effacer",
+    "export": "Exporter",
+    "cancel": "Annuler",
+    "hide_title": "Masquer"
+  },
+  "playlist": {
+    "add_to_log_title": "Ajouter au journal"
+  },
+  "log": {
+    "dl_title": "Exporter",
+    "nav_title": "Aller au fragment",
+    "del_title": "Supprimer de la liste"
+  },
+  "clock": {
+    "adjust_title": "Clic gauche — augmenter, clic droit — diminuer"
+  },
+  "export": {
+    "title": "Exporter le segment",
+    "format_label": "Format :",
+    "samplerate_label": "Fréquence d'échantillonnage :",
+    "bitrate_label": "Débit :",
+    "wav_note": "Le WAV est exporté en PCM 16 bits non compressé.",
+    "copy_note": "⚡ Format natif de la chaîne — export sans réencodage",
+    "in_progress": "Export en cours…",
+    "done": "Terminé ! Téléchargement…",
+    "error": "Erreur d'export : {msg}",
+    "all_progress": "⬇ Export {n} / {total}…",
+    "all_done": "✓ Export terminé ({total})",
+    "all_errors": "⚠ Export : {ok} sur {total} — erreurs : {failed}"
+  },
+  "login": {
+    "page_title": "Avocado — Connexion",
+    "username_label": "Nom d'utilisateur",
+    "domain_hint": "Utilisateurs de domaine :<br><strong>a.pushkin</strong> — recherche dans tous les domaines configurés<br><strong>CONTOSO\\a.pushkin</strong> — domaine explicite (plusieurs domaines)<br><strong>a.pushkin@contoso.local</strong> — par suffixe UPN",
+    "password_label": "Mot de passe",
+    "submit": "Se connecter",
+    "submit_checking": "Vérification…",
+    "error_empty_username": "Veuillez entrer un nom d'utilisateur",
+    "error_wrong_credentials": "Nom d'utilisateur ou mot de passe invalide.",
+    "error_connection": "Erreur de connexion au serveur"
+  }
+}

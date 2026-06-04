@@ -1,0 +1,125 @@
+{
+  "app": {
+    "title": "Авокадо"
+  },
+  "menu": {
+    "hamburger_title": "Меню",
+    "theme_light": "☀️ Светлый режим",
+    "theme_dark": "🌙 Тёмный режим",
+    "rescan_channel": "🔍 Пересканировать текущий канал",
+    "rescan_playlogs": "📋 Пересканировать плейлог станции",
+    "reload_config": "🔄 Обновить конфигурацию без перезапуска",
+    "restart_server": "🔁 Перезапустить сервер",
+    "logout": "🚪 Выйти",
+    "language": "🌐 Язык"
+  },
+  "channel": {
+    "select_prompt": "Выберите канал ⬇️",
+    "filter_placeholder": "Фильтр…",
+    "open_list_title": "Открыть список каналов",
+    "copy_path_title_fmt": "Скопировать путь: {path}",
+    "copy_path_unavailable": "Путь недоступен",
+    "copy_url_title": "Скопировать ссылку на текущее время",
+    "path_unavailable_alert": "Путь к папке недоступен для этого канала.",
+    "copy_manual_prompt": "Скопируйте путь вручную:"
+  },
+  "transport": {
+    "play_title": "Воспроизвести / Пауза",
+    "mark_in_title": "Установить начало сегмента",
+    "mark_out_title": "Установить конец сегмента",
+    "add_segment": "Добавить сегмент",
+    "clear_selection": "Очистить выделение",
+    "go_now_title": "Перейти к текущему времени",
+    "no_selection_alert": "Сначала выделите фрагмент кнопками In и Out",
+    "no_channel_alert": "Выберите канал записи",
+    "segment_too_large_alert": "Слишком большой сегмент — экспорт не будет корректным.\nВыделите фрагмент не длиннее 3 часов."
+  },
+  "sel": {
+    "warning": "⚠ Слишком большой сегмент, экспорт не будет корректным"
+  },
+  "status": {
+    "init": "Инициализация…",
+    "buffering": "⌛ Буферизация…",
+    "index_ready": "Индекс готов · {files} файлов · {channels} каналов{failed}",
+    "index_scanning": "Обновление ({done}/{total}){label}…",
+    "cache_loaded": "Кэш загружен · {files} файлов · обновление в фоне…",
+    "rescan_done": "Пересканирование завершено · {name} · {files} файлов",
+    "unavailable_count": " · ⚠ {n} недоступн.",
+    "detail_done": "готово: {name} · {files} файлов",
+    "detail_unavailable": "⚠ недоступен: {name}",
+    "no_channel": "Сначала выберите канал",
+    "rescanning": "Пересканирование · {name}…",
+    "rescan_error": "Ошибка пересканирования: {msg}",
+    "reload_config": "Обновление конфигурации…",
+    "config_reloaded": "Конфигурация обновлена · {stations} ст. · {channels} кан. · {playlogs} плейл.",
+    "config_error": "Ошибка обновления конфигурации: {msg}",
+    "restart_confirm": "Перезапустить сервер?\nСтраница обновится автоматически через несколько секунд.",
+    "restarting": "Перезапуск сервера…"
+  },
+  "playlog": {
+    "checking": "Проверка плейлогов…",
+    "available": "Плейлоги доступны · {n} источн.",
+    "unavailable": "Плейлоги: {failed} из {total} недоступн.",
+    "no_channel": "Сначала выберите канал",
+    "rescanning": "Пересканирование плейлогов…",
+    "rescan_error": "Ошибка: {msg}"
+  },
+  "dot": {
+    "available": "доступен",
+    "checking": "проверяется…",
+    "unavailable_click": "недоступен — нажмите для диагностики",
+    "updating": "обновляется…",
+    "files": "{n} файлов"
+  },
+  "diag": {
+    "title": "Недоступные каналы",
+    "unknown_reason": "причина неизвестна"
+  },
+  "panel": {
+    "playlog": "ПЛЕЙЛОГ",
+    "segments": "ВЫБРАННЫЕ СЕГМЕНТЫ"
+  },
+  "btn": {
+    "download_all": "Скачать всё",
+    "clear": "Очистить",
+    "export": "Экспортировать",
+    "cancel": "Отмена",
+    "hide_title": "Скрыть"
+  },
+  "playlist": {
+    "add_to_log_title": "Добавить в лог-лист"
+  },
+  "log": {
+    "dl_title": "Экспортировать",
+    "nav_title": "Перейти к фрагменту",
+    "del_title": "Удалить из лог-листа"
+  },
+  "clock": {
+    "adjust_title": "ЛКМ — увеличить, ПКМ — уменьшить"
+  },
+  "export": {
+    "title": "Экспорт сегмента",
+    "format_label": "Формат:",
+    "samplerate_label": "Частота дискретизации:",
+    "bitrate_label": "Битрейт:",
+    "wav_note": "WAV экспортируется как PCM 16-bit без сжатия",
+    "copy_note": "⚡ Оригинальный формат канала — экспорт без перекодирования",
+    "in_progress": "Экспорт…",
+    "done": "Готово! Скачивание…",
+    "error": "Ошибка экспорта: {msg}",
+    "all_progress": "⬇ Экспорт {n} / {total}…",
+    "all_done": "✓ Экспорт завершён ({total})",
+    "all_errors": "⚠ Экспорт: {ok} из {total} — ошибки: {failed}"
+  },
+  "login": {
+    "page_title": "Авокадо — Вход",
+    "username_label": "Имя пользователя",
+    "domain_hint": "Доменные пользователи:<br><strong>a.pushkin</strong> — поиск во всех настроенных доменах<br><strong>CONTOSO\\a.pushkin</strong> — явное указание домена (несколько доменов)<br><strong>a.pushkin@contoso.local</strong> — по суффиксу UPN",
+    "password_label": "Пароль",
+    "submit": "Войти",
+    "submit_checking": "Проверка…",
+    "error_empty_username": "Введите имя пользователя",
+    "error_wrong_credentials": "Неверное имя пользователя или пароль",
+    "error_connection": "Ошибка подключения к серверу"
+  }
+}

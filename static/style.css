@@ -564,6 +564,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
+  min-height: 35px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
   font-weight: 600;
@@ -804,6 +805,40 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   user-select: none;
 }
 .menu-item-danger { color: var(--danger) !important; }
+
+/* ── Language selector in menu ────────────────────────────── */
+.menu-lang-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  gap: 8px;
+}
+.menu-lang-label {
+  font-size: 13px;
+  color: var(--text);
+  user-select: none;
+  white-space: nowrap;
+}
+.menu-lang-btns {
+  display: flex;
+  gap: 4px;
+}
+.menu-lang-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text2);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.05em;
+  transition: border-color 0.15s, color 0.15s;
+  width: auto;
+}
+.menu-lang-btn:hover  { border-color: var(--accent2); color: var(--accent2); }
+.menu-lang-btn.active { border-color: var(--accent2); color: var(--accent2); }
 
 /* ── Playlog status bar ───────────────────────────────────── */
 #playlog-bar {

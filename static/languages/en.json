@@ -1,0 +1,125 @@
+{
+  "app": {
+    "title": "Avocado"
+  },
+  "menu": {
+    "hamburger_title": "Menu",
+    "theme_light": "☀️ Light mode",
+    "theme_dark": "🌙 Dark mode",
+    "rescan_channel": "🔍 Rescan current channel",
+    "rescan_playlogs": "📋 Rescan station playlogs",
+    "reload_config": "🔄 Reload configuration",
+    "restart_server": "🔁 Restart server",
+    "logout": "🚪 Log out",
+    "language": "🌐 Language"
+  },
+  "channel": {
+    "select_prompt": "Select a channel ⬇️",
+    "filter_placeholder": "Filter…",
+    "open_list_title": "Open channel list",
+    "copy_path_title_fmt": "Copy path: {path}",
+    "copy_path_unavailable": "Path unavailable",
+    "copy_url_title": "Copy link to current time",
+    "path_unavailable_alert": "Folder path is unavailable for this channel.",
+    "copy_manual_prompt": "Copy the path manually:"
+  },
+  "transport": {
+    "play_title": "Play / Pause",
+    "mark_in_title": "Set segment start",
+    "mark_out_title": "Set segment end",
+    "add_segment": "Add segment",
+    "clear_selection": "Clear selection",
+    "go_now_title": "Go to current time",
+    "no_selection_alert": "Set a selection with In and Out first",
+    "no_channel_alert": "Select a recording channel first",
+    "segment_too_large_alert": "Segment too large — export may be incorrect.\nSelect a fragment no longer than 3 hours."
+  },
+  "sel": {
+    "warning": "⚠ Segment too large, export may be incorrect"
+  },
+  "status": {
+    "init": "Initialising…",
+    "buffering": "⌛ Buffering…",
+    "index_ready": "Index ready · {files} files · {channels} channels{failed}",
+    "index_scanning": "Updating ({done}/{total}){label}…",
+    "cache_loaded": "Cache loaded · {files} files · updating in background…",
+    "rescan_done": "Rescan complete · {name} · {files} files",
+    "unavailable_count": " · ⚠ {n} unavailable",
+    "detail_done": "done: {name} · {files} files",
+    "detail_unavailable": "⚠ unavailable: {name}",
+    "no_channel": "Select a channel first",
+    "rescanning": "Rescanning · {name}…",
+    "rescan_error": "Rescan error: {msg}",
+    "reload_config": "Reloading configuration…",
+    "config_reloaded": "Configuration reloaded · {stations} st. · {channels} ch. · {playlogs} pl.",
+    "config_error": "Configuration reload error: {msg}",
+    "restart_confirm": "Restart the server?\nThe page will reload automatically in a few seconds.",
+    "restarting": "Restarting server…"
+  },
+  "playlog": {
+    "checking": "Checking playlogs…",
+    "available": "Playlogs available · {n} source(s)",
+    "unavailable": "Playlogs: {failed} of {total} unavailable",
+    "no_channel": "Select a channel first",
+    "rescanning": "Rescanning playlogs…",
+    "rescan_error": "Error: {msg}"
+  },
+  "dot": {
+    "available": "available",
+    "checking": "checking…",
+    "unavailable_click": "unavailable — click for diagnostics",
+    "updating": "updating…",
+    "files": "{n} files"
+  },
+  "diag": {
+    "title": "Unavailable channels",
+    "unknown_reason": "reason unknown"
+  },
+  "panel": {
+    "playlog": "PLAYLOG",
+    "segments": "SELECTED SEGMENTS"
+  },
+  "btn": {
+    "download_all": "Download all",
+    "clear": "Clear",
+    "export": "Export",
+    "cancel": "Cancel",
+    "hide_title": "Hide"
+  },
+  "playlist": {
+    "add_to_log_title": "Add to log list"
+  },
+  "log": {
+    "dl_title": "Export",
+    "nav_title": "Go to fragment",
+    "del_title": "Remove from log list"
+  },
+  "clock": {
+    "adjust_title": "Left click — increment, Right click — decrement"
+  },
+  "export": {
+    "title": "Export segment",
+    "format_label": "Format:",
+    "samplerate_label": "Sample rate:",
+    "bitrate_label": "Bitrate:",
+    "wav_note": "WAV is exported as uncompressed PCM 16-bit",
+    "copy_note": "⚡ Native channel format — export without re-encoding",
+    "in_progress": "Exporting…",
+    "done": "Done! Downloading…",
+    "error": "Export error: {msg}",
+    "all_progress": "⬇ Exporting {n} / {total}…",
+    "all_done": "✓ Export complete ({total})",
+    "all_errors": "⚠ Export: {ok} of {total} — errors: {failed}"
+  },
+  "login": {
+    "page_title": "Avocado — Login",
+    "username_label": "Username",
+    "domain_hint": "Domain users:<br><strong>a.pushkin</strong> — search across all configured domains<br><strong>CONTOSO\\a.pushkin</strong> — explicit domain (multiple domains)<br><strong>a.pushkin@contoso.local</strong> — by UPN suffix",
+    "password_label": "Password",
+    "submit": "Log in",
+    "submit_checking": "Checking…",
+    "error_empty_username": "Enter a username",
+    "error_wrong_credentials": "Incorrect username or password",
+    "error_connection": "Connection error"
+  }
+}
