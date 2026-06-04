@@ -15,8 +15,10 @@ from typing import Any
 import aiofiles
 from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+
+from . import auth as _auth
 
 from .app_logger import get_logger
 from .audio import export_audio, set_ffmpeg_path, stream_audio
@@ -123,6 +125,43 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # ──────────────────────────────────────────────────────────────────────────────
 # Request logging middleware
 # ──────────────────────────────────────────────────────────────────────────────
+# Auth middleware  (defined first → runs INSIDE the logging wrapper)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_AUTH_SKIP_PREFIXES = ("/static/", "/api/auth/")
+_AUTH_SKIP_EXACT    = {"/login"}
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    # Paths that never require auth
+    if path in _AUTH_SKIP_EXACT or any(path.startswith(p) for p in _AUTH_SKIP_PREFIXES):
+        return await call_next(request)
+
+    if not _auth.auth_required():
+        request.state.user = None
+        return await call_next(request)
+
+    token   = request.cookies.get(_auth.COOKIE_NAME)
+    session = _auth.get_session(token) if token else None
+
+    if not session:
+        is_api = path.startswith("/api/") or path.startswith("/ws")
+        if is_api:
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        # Preserve original URL so login can redirect back
+        next_url = path + (f"?{request.url.query}" if request.url.query else "")
+        from urllib.parse import quote as _quote
+        return RedirectResponse(f"/login?next={_quote(next_url)}", status_code=302)
+
+    request.state.user = session
+    return await call_next(request)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Request logging middleware (defined second → runs OUTSIDE, first on request)
+# ──────────────────────────────────────────────────────────────────────────────
 
 @app.middleware("http")
 async def _log_requests(request: Request, call_next):
@@ -187,6 +226,75 @@ async def _check_playlogs() -> None:
     ok  = sum(1 for pl in results for s in pl["sources"] if s["ok"])
     bad = sum(1 for pl in results for s in pl["sources"] if not s["ok"])
     log.info("Playlog check done: %d ok, %d unavailable (date=%s)", ok, bad, check_date)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Auth endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/login", include_in_schema=False)
+async def login_page() -> FileResponse:
+    return FileResponse(str(STATIC_DIR / "login.html"))
+
+
+@app.post("/api/auth/login")
+async def api_login(request: Request) -> JSONResponse:
+    data     = await request.json()
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", ""))
+
+    if not username:
+        raise HTTPException(status_code=400, detail="Введите имя пользователя")
+
+    try:
+        user = _auth.authenticate(username, password)
+    except _auth.AuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
+
+    token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"])
+    resp  = JSONResponse({
+        "username":  user["username"],
+        "is_admin":  user["is_admin"],
+        "auth_type": user["auth_type"],
+    })
+    resp.set_cookie(
+        _auth.COOKIE_NAME, token,
+        max_age=_auth.SESSION_TTL,
+        httponly=True,
+        samesite="lax",
+    )
+    return resp
+
+
+@app.post("/api/auth/logout")
+async def api_logout(request: Request) -> JSONResponse:
+    token = request.cookies.get(_auth.COOKIE_NAME)
+    if token:
+        _auth.delete_session(token)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(_auth.COOKIE_NAME)
+    return resp
+
+
+@app.get("/api/auth/me")
+async def api_me(request: Request) -> dict:
+    if not _auth.auth_required():
+        return {"auth_required": False, "username": None, "is_admin": True}
+    token   = request.cookies.get(_auth.COOKIE_NAME)
+    session = _auth.get_session(token) if token else None
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {
+        "auth_required": True,
+        "username":  session["username"],
+        "is_admin":  session["is_admin"],
+        "auth_type": session["auth_type"],
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

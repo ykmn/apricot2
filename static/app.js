@@ -18,7 +18,46 @@ const _LOG_KEY = 'avocado-logitems';
 const audio = document.getElementById('audio-player');
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
+// ── Auth state (populated on load) ────────────────────────────────────────────
+let currentUser = null;   // {username, is_admin, auth_required} or null
+
+async function initAuth() {
+  try {
+    const data = await api('/api/auth/me');
+    currentUser = data;
+  } catch (e) {
+    // 401 → middleware already redirected to /login before we got here,
+    // but handle gracefully just in case.
+    if (e.message && e.message.includes('401')) {
+      location.href = '/login';
+    }
+    currentUser = { auth_required: false, is_admin: true, username: null };
+  }
+  _applyAuthUI();
+}
+
+function _applyAuthUI() {
+  const isAdmin = currentUser?.is_admin !== false;
+
+  // Show/hide admin-only menu items
+  document.querySelectorAll('[data-admin-only]').forEach(el => {
+    el.classList.toggle('hidden', !isAdmin);
+  });
+
+  // Show user info + logout if auth is active
+  if (currentUser?.auth_required && currentUser?.username) {
+    const info = document.getElementById('menu-userinfo');
+    const sep  = document.getElementById('menu-sep-logout');
+    const btn  = document.getElementById('menu-logout');
+    if (info) { info.textContent = `👤 ${currentUser.username}`; info.classList.remove('hidden'); }
+    if (sep)  sep.classList.remove('hidden');
+    if (btn)  btn.classList.remove('hidden');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  await initAuth();
+
   Timeline.init({
     onTimeChange: ts => {
       refreshPlaylistForVisible();
@@ -1355,6 +1394,13 @@ function initHamburgerMenu() {
       }).catch(() => setTimeout(_tryReload, 1000));
     };
     setTimeout(_tryReload, 1500);
+  });
+
+  // Logout
+  document.getElementById('menu-logout').addEventListener('click', async () => {
+    menu.classList.add('hidden');
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* ok */ }
+    location.href = '/login';
   });
 }
 

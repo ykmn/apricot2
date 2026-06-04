@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Авокадо — Вход</title>
+  <link rel="icon" href="/static/favicon.svg" sizes="any" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-card {
+      background: #16213e;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 44px 52px;
+      width: 400px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 36px;
+    }
+    .login-brand span {
+      font-family: Impact, 'Arial Narrow', sans-serif;
+      font-size: 44px;
+      color: #0ec47a;
+      letter-spacing: 0.05em;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11px;
+      color: #7080a0;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 6px;
+    }
+
+    .form-group { margin-bottom: 18px; }
+
+    .form-input {
+      width: 100%;
+      background: #0f3460;
+      border: 1px solid #2a2a4a;
+      border-radius: 5px;
+      color: #e0e0e0;
+      padding: 11px 14px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: #0f9af0; }
+
+    .btn-login {
+      width: 100%;
+      background: #0ec47a;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: filter 0.15s;
+      letter-spacing: 0.03em;
+    }
+    .btn-login:hover   { filter: brightness(1.1); }
+    .btn-login:active  { filter: brightness(0.95); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
+
+    .hint {
+      font-size: 11px;
+      color: #506080;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+    .error-msg {
+      min-height: 22px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: #e74c3c;
+      white-space: pre-line;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+<div class="login-card">
+
+  <div class="login-brand">
+    <img src="/static/favicon.svg" width="54" height="54" alt="">
+    <span>Авокадо</span>
+  </div>
+
+  <form id="login-form" autocomplete="on">
+    <div class="form-group">
+      <label class="form-label" for="username">Имя пользователя</label>
+      <input id="username" class="form-input" type="text"
+             autocomplete="username" autofocus spellcheck="false">
+      <div class="hint">
+        Доменные пользователи:<br>
+        <strong>a.pushkin</strong> — поиск во всех настроенных доменах<br>
+        <strong>CONTOSO\a.pushkin</strong> — явное указание домена (несколько доменов)<br>
+        <strong>a.pushkin@contoso.local</strong> — по суффиксу UPN
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="password">Пароль</label>
+      <input id="password" class="form-input" type="password"
+             autocomplete="current-password">
+    </div>
+    <button id="btn-submit" class="btn-login" type="submit">Войти</button>
+    <div id="error-msg" class="error-msg"></div>
+  </form>
+
+</div>
+<script>
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const errEl    = document.getElementById('error-msg');
+  const btn      = document.getElementById('btn-submit');
+
+  if (!username) { errEl.textContent = 'Введите имя пользователя'; return; }
+
+  errEl.textContent = '';
+  btn.disabled = true;
+  btn.textContent  = 'Проверка…';
+
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, password }),
+    });
+
+    if (resp.ok) {
+      const next = new URLSearchParams(location.search).get('next') || '/';
+      location.href = next;
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      errEl.textContent = data.detail || 'Неверное имя пользователя или пароль';
+      btn.disabled = false;
+      btn.textContent = 'Войти';
+      document.getElementById('password').select();
+    }
+  } catch {
+    errEl.textContent = 'Ошибка подключения к серверу';
+    btn.disabled = false;
+    btn.textContent = 'Войти';
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+# config/ldap.yaml
+# Конфигурация аутентификации Авокадо
+#
+# Если этот файл ОТСУТСТВУЕТ в папке config/ — авторизация отключена.
+# Если файл присутствует — требуется вход через один из включённых методов.
+
+# ── Локальная аутентификация (из config/users.yaml) ───────────────────────────
+Local: true
+
+# ── Доменная аутентификация (Windows Active Directory / LDAP) ─────────────────
+LDAP: false
+
+# Группы AD с правами администратора (применяются ко всем доменам, если не переопределены)
+admin_groups:
+  - "CN=RadioAdmins,OU=Groups,DC=corp,DC=local"
+
+# Группы AD с правами просмотра
+access_groups:
+  - "CN=RadioUsers,OU=Groups,DC=corp,DC=local"
+  - "CN=PartnerUsers,OU=Groups,DC=partner,DC=local"  # пример группы из доверенного домена
+
+
+# ── Вариант 1: Один домен (простая конфигурация) ──────────────────────────────
+#
+# server:      "ldap://dc01.corp.local"   # URL LDAP-сервера (или :3268 для Global Catalog)
+# domain:      "CORP"                     # NetBIOS-имя домена
+# base_dn:     "DC=corp,DC=local"         # Корень поиска
+# bind_secret: 10                         # id сервисного аккаунта из secret.yaml
+
+
+# ── Вариант 2: Несколько доменов / доверенные домены ──────────────────────────
+#
+# Пользователь может входить как:
+#   ivanov            — поиск последовательно во всех доменах
+#   CORP\ivanov       — явное указание домена по полю 'name'
+#   ivanov@corp.local — явное указание по UPN-суффиксу (из base_dn или upn_suffix)
+#
+# domains:
+#   - name:        "CORP"                    # NetBIOS-имя (для CORP\user)
+#     server:      "ldap://dc01.corp.local"
+#     base_dn:     "DC=corp,DC=local"
+#     bind_secret: 10
+#
+#   - name:        "PARTNER"
+#     server:      "ldap://dc01.partner.local"
+#     base_dn:     "DC=partner,DC=local"
+#     bind_secret: 11
+#     # Можно переопределить группы для конкретного домена:
+#     # admin_groups:  [...]
+#     # access_groups: [...]
+
+
+# ── Вариант 3: Global Catalog (один лес, несколько доменов) ───────────────────
+#
+# Global Catalog (порт 3268) хранит объекты из всех доменов леса.
+# Достаточно одной записи — пользователи из любого домена найдутся автоматически.
+#
+# domains:
+#   - name:        "CORP"
+#     server:      "ldap://gc.corp.local:3268"   # порт 3268 = Global Catalog
+#     base_dn:     "DC=corp,DC=local"
+#     bind_secret: 10

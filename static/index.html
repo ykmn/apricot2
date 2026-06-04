@@ -21,21 +21,24 @@
       <button id="btn-hamburger" title="Меню">☰</button>
       <div id="hamburger-menu" class="hidden">
         <button class="menu-item" id="menu-theme">☀️ Светлый режим</button>
-        <button class="menu-item" id="menu-rescan">🔍 Пересканировать текущий канал</button>
-        <button class="menu-item" id="menu-rescan-playlogs">📋 Пересканировать плейлоги станции</button>
-        <div class="menu-sep"></div>
-        <button class="menu-item" id="menu-reload">🔄 Обновить конфигурацию</button>
-        <div class="menu-sep"></div>
-        <button class="menu-item" id="menu-restart">🔁 Перезапустить сервер</button>
+        <button class="menu-item" id="menu-rescan"          data-admin-only>🔍 Пересканировать текущий канал</button>
+        <button class="menu-item" id="menu-rescan-playlogs" data-admin-only>📋 Пересканировать плейлоги станции</button>
+        <div class="menu-sep" data-admin-only></div>
+        <button class="menu-item" id="menu-reload"  data-admin-only>🔄 Обновить конфигурацию</button>
+        <div class="menu-sep" data-admin-only></div>
+        <button class="menu-item" id="menu-restart" data-admin-only>🔁 Перезапустить сервер</button>
         <div class="menu-sep"></div>
         <span class="menu-version" id="menu-ver">v…</span>
+        <div class="menu-sep hidden" id="menu-sep-logout"></div>
+        <div class="menu-userinfo hidden" id="menu-userinfo"></div>
+        <button class="menu-item menu-item-danger hidden" id="menu-logout">🚪 Выйти</button>
       </div>
     </div>
   </div>
 
   <!-- ── Channel bar (строка 2: канал + фильтр + часы) ────────────── -->
   <div id="channel-bar">
-    <div id="channel-label">Выберите канал</div>
+    <div id="channel-label">Выберите канал ⬇️</div>
     <div id="channel-controls">
       <div id="channel-selector-wrap">
         <div id="channel-input-row">
@@ -117,7 +120,6 @@
     <div id="playlist-panel" class="panel">
       <div class="panel-header">
         <span>ПЛЕЙЛОГ</span>
-        <button id="btn-color-assign" class="btn-sm">Назначить цвета</button>
       </div>
       <div id="playlist-list" class="scrollable-list"></div>
     </div>

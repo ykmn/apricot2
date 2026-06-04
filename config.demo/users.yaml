@@ -1,0 +1,14 @@
+# config/users.yaml
+# Локальные пользователи Авокадо (используются при Local: true в ldap.yaml)
+#
+# is_admin: true  — доступ к функциям управления (пересканирование, перезагрузка конфига, перезапуск)
+# is_admin: false — только навигация, прослушивание и экспорт
+
+users:
+  - username: admin
+    password: admin
+    is_admin: true
+
+  - username: user
+    password: user
+    is_admin: false
