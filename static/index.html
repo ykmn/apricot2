@@ -53,14 +53,13 @@
     <div id="channel-label" data-i18n="channel.select_prompt">Выберите канал ⬇️</div>
     <div id="channel-controls">
       <div id="channel-selector-wrap">
-        <div id="channel-input-row">
-          <input id="channel-search" type="text" data-i18n-ph="channel.filter_placeholder" placeholder="Фильтр…" autocomplete="off">
-          <button id="channel-list-btn" data-i18n-title="channel.open_list_title" title="Открыть список каналов">▾</button>
-          <button id="channel-copy-btn" title="Путь недоступен">⧉</button>
-          <button id="btn-copy-url" data-i18n-title="channel.copy_url_title" title="Скопировать ссылку на текущее время">#</button>
-        </div>
+        <input id="channel-search" type="text" data-i18n-ph="channel.filter_placeholder" placeholder="Фильтр…" autocomplete="off">
         <div id="channel-dropdown" class="dropdown hidden"></div>
       </div>
+      <button id="channel-list-btn" data-i18n-title="channel.open_list_title" title="Открыть список каналов">▾</button>
+      <button id="channel-copy-btn" title="Путь недоступен">⧉</button>
+      <button id="btn-copy-url" data-i18n-title="channel.copy_url_title" title="Скопировать ссылку на текущее время">#</button>
+      <div class="topbar-spacer"></div>
       <div id="topbar-right">
         <span class="clock-part" id="clk-day">--</span>
         <span class="clock-sep">.</span>

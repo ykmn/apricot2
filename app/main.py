@@ -27,7 +27,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "1.1.002"
+VERSION = "1.1.003"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -303,11 +303,12 @@ async def api_login(request: Request) -> JSONResponse:
         log.error("Auth failed for '%s': no user returned", username)
         raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
 
-    token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"])
+    token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"], user.get("domain", ""))
     resp  = JSONResponse({
         "username":  user["username"],
         "is_admin":  user["is_admin"],
         "auth_type": user["auth_type"],
+        "domain":    user.get("domain", ""),
     })
     resp.set_cookie(
         _auth.COOKIE_NAME, token,
@@ -341,6 +342,7 @@ async def api_me(request: Request) -> dict:
         "username":  session["username"],
         "is_admin":  session["is_admin"],
         "auth_type": session["auth_type"],
+        "domain":    session.get("domain", ""),
     }
 
 

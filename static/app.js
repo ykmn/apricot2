@@ -49,7 +49,13 @@ function _applyAuthUI() {
     const info = document.getElementById('menu-userinfo');
     const sep  = document.getElementById('menu-sep-logout');
     const btn  = document.getElementById('menu-logout');
-    if (info) { info.textContent = `👤 ${currentUser.username}`; info.classList.remove('hidden'); }
+    if (info) {
+      const displayName = currentUser.domain
+        ? `${currentUser.domain}\\${currentUser.username}`
+        : currentUser.username;
+      info.textContent = `👤 ${displayName}`;
+      info.classList.remove('hidden');
+    }
     if (sep)  sep.classList.remove('hidden');
     if (btn)  btn.classList.remove('hidden');
   }
@@ -287,9 +293,14 @@ function selectChannel(ch, st) {
   });
   document.getElementById('channel-dropdown').classList.add('hidden');
 
+  const wasPlaying = isPlaying;
+  if (wasPlaying) stopPlay();
+
   Timeline.setChannel(ch.id);
   loadPlaylist();
   _updateBrandLink();
+
+  if (wasPlaying) startPlay();
 }
 
 // ── Playlist ───────────────────────────────────────────────────────────────

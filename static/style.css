@@ -131,8 +131,8 @@ body {
 
 #channel-selector-wrap {
   position: relative;
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 400px;
+  width: 400px;
 }
 
 #channel-label {
@@ -147,15 +147,13 @@ body {
   letter-spacing: 0.02em;
 }
 
-#channel-input-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.topbar-spacer {
+  flex: 1;
 }
 
 #channel-search {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   height: 34px;
   box-sizing: border-box;
   background: var(--bg3);
@@ -244,7 +242,6 @@ body {
 
 /* ── Clock ────────────────────────────────────────────────── */
 #topbar-right {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 2px;

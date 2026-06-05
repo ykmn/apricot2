@@ -140,12 +140,13 @@ def auth_required() -> bool:
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
-def create_session(username: str, is_admin: bool, auth_type: str) -> str:
+def create_session(username: str, is_admin: bool, auth_type: str, domain: str = "") -> str:
     token = secrets.token_urlsafe(32)
     _sessions[token] = {
         "username":  username,
         "is_admin":  is_admin,
         "auth_type": auth_type,
+        "domain":    domain,
         "expires":   time.time() + SESSION_TTL,
     }
     _save_sessions()
@@ -446,7 +447,7 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
             f"Обратитесь к администратору для получения доступа.",
         )
 
-    return {"username": short_name, "is_admin": is_admin, "auth_type": "ldap"}
+    return {"username": short_name, "is_admin": is_admin, "auth_type": "ldap", "domain": domain_label}
 
 
 # ── Multi-domain LDAP dispatcher ──────────────────────────────────────────────
