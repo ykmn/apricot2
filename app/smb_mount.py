@@ -82,45 +82,71 @@ def _current_user() -> str:
         return os.environ.get("USER", str(os.getuid()))
 
 
+_SMB_VERSIONS = ("3.0", "2.1", "2.0", "1.0")
+
+
+def _umount_lazy(mount_point: Path) -> None:
+    """Lazy-unmount a stale/busy mountpoint (best-effort)."""
+    try:
+        umount_bin = shutil.which("umount") or "/bin/umount"
+        if os.getuid() == 0:
+            cmd = [umount_bin, "-l", str(mount_point)]
+        else:
+            cmd = ["sudo", umount_bin, "-l", str(mount_point)]
+        subprocess.run(cmd, capture_output=True, timeout=10)
+    except Exception:
+        pass
+
+
 def _mount_linux(smb: SMBConfig, mount_point: Path) -> str:
     """Mount via mount.cifs directly (called with sudo when not root).
 
     sudoers entry required for non-root users:
         <user> ALL=(root) NOPASSWD: /sbin/mount.cifs
+    Falls back through SMB versions 3.0→2.1→2.0→1.0 on error(95).
     """
-    # Locate mount.cifs binary
     cifs_bin = shutil.which("mount.cifs") or "/sbin/mount.cifs"
-
-    options = [
+    unc = f"//{smb.host}/{smb.share}"
+    base_options = [
         f"username={smb.username}",
         f"password={smb.password or ''}",
         f"uid={os.getuid()}",
         f"gid={os.getgid()}",
-        "vers=3.0",
         "iocharset=utf8",
     ]
     if smb.domain:
-        options.append(f"domain={smb.domain}")
+        base_options.append(f"domain={smb.domain}")
 
-    unc = f"//{smb.host}/{smb.share}"
-
-    # Build command: root can call directly, others need sudo
-    if os.getuid() == 0:
-        cmd = [cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
-    else:
-        cmd = ["sudo", cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
-
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        if r.returncode != 0:
-            return (r.stderr or r.stdout).strip() or f"exit code {r.returncode}"
-        return ""
-    except FileNotFoundError:
-        return "mount.cifs not found — установите: sudo apt install cifs-utils"
-    except subprocess.TimeoutExpired:
-        return "timeout (15 s)"
-    except Exception as exc:
-        return str(exc)
+    last_err = ""
+    for vers in _SMB_VERSIONS:
+        options = base_options + [f"vers={vers}"]
+        if os.getuid() == 0:
+            cmd = [cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
+        else:
+            cmd = ["sudo", cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if r.returncode == 0:
+                return ""
+            err = (r.stderr or r.stdout).strip() or f"exit code {r.returncode}"
+            # error(16) = Device or resource busy — stale mount, try lazy umount once
+            if "error(16)" in err:
+                _umount_lazy(mount_point)
+                r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                if r2.returncode == 0:
+                    return ""
+                err = (r2.stderr or r2.stdout).strip() or err
+            last_err = err
+            # Only retry with lower version on "Operation not supported" (error 95)
+            if "error(95)" not in err:
+                break
+        except FileNotFoundError:
+            return "mount.cifs not found — установите: sudo apt install cifs-utils"
+        except subprocess.TimeoutExpired:
+            return "timeout (15 s)"
+        except Exception as exc:
+            return str(exc)
+    return last_err
 
 
 def _mount_macos(smb: SMBConfig, mount_point: Path) -> str:
