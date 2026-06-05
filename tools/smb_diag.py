@@ -3,12 +3,10 @@
 
 Usage (from project root, with venv active):
     python tools/smb_diag.py
-
-Reads hosts from config/stations/*.yaml and config/playlogs/*.yaml,
-attempts SMB negotiation and reports supported protocol versions.
 """
 from __future__ import annotations
 
+import os
 import socket
 import struct
 import sys
@@ -19,25 +17,20 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+# Force NTLM — same as smb_client.py
+if os.name != "nt" and "KRB5CCNAME" not in os.environ:
+    os.environ["KRB5CCNAME"] = "MEMORY:"
 
-# ── Collect hosts from config ─────────────────────────────────────────────────
 
-def _collect_hosts() -> list[str]:
-    import yaml
-    hosts: set[str] = set()
-    for pattern in ("config/stations/*.yaml", "config/playlogs/*.yaml"):
-        for path in sorted(ROOT.glob(pattern)):
-            try:
-                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            except Exception:
-                continue
-            for ch in data.get("channels", []):
-                if smb := ch.get("smb"):
-                    hosts.add(smb["host"])
-            for src in data.get("sources", []):
-                if smb := src.get("smb"):
-                    hosts.add(smb["host"])
-    return sorted(hosts, key=str.lower)
+# ── Collect hosts + credentials from config ───────────────────────────────────
+
+def _collect_smb_configs() -> list:
+    """Return list of SMBConfig objects (unique host+share pairs)."""
+    from app.config import load_stations, load_playlists
+    from app.smb_mount import collect_smb_configs, _collect_unique
+    stations  = load_stations()
+    playlists = load_playlists()
+    return _collect_unique(collect_smb_configs(stations, playlists))
 
 
 # ── TCP reachability ──────────────────────────────────────────────────────────
@@ -50,32 +43,31 @@ def _tcp_open(host: str, port: int = 445, timeout: float = 3.0) -> bool:
         return False
 
 
-# ── Raw SMB1 negotiate (no credentials needed) ───────────────────────────────
+# ── Raw SMB negotiate (no credentials) ───────────────────────────────────────
 
 _SMB1_NEG = (
-    b"\x00\x00\x00\x54"          # NetBIOS session length
-    b"\xffSMB"                    # SMB magic
-    b"\x72"                       # Command: Negotiate Protocol
-    b"\x00\x00\x00\x00"          # NT Status
-    b"\x18"                       # Flags
-    b"\x01\x28"                   # Flags2
-    b"\x00\x00"                   # PID High
-    b"\x00\x00\x00\x00\x00\x00\x00\x00"  # Signature
-    b"\x00\x00"                   # Reserved
-    b"\xff\xff"                   # TID
-    b"\xfe\xff"                   # PID
-    b"\x00\x00"                   # UID
-    b"\x40\x00"                   # MID
-    b"\x00"                       # WordCount
-    b"\x26\x00"                   # ByteCount = 38
-    b"\x02NT LM 0.12\x00"         # dialect
-    b"\x02SMB 2.002\x00"          # dialect
-    b"\x02SMB 2.???\x00"          # dialect
+    b"\x00\x00\x00\x54"
+    b"\xffSMB"
+    b"\x72"
+    b"\x00\x00\x00\x00"
+    b"\x18"
+    b"\x01\x28"
+    b"\x00\x00"
+    b"\x00\x00\x00\x00\x00\x00\x00\x00"
+    b"\x00\x00"
+    b"\xff\xff"
+    b"\xfe\xff"
+    b"\x00\x00"
+    b"\x40\x00"
+    b"\x00"
+    b"\x26\x00"
+    b"\x02NT LM 0.12\x00"
+    b"\x02SMB 2.002\x00"
+    b"\x02SMB 2.???\x00"
 )
 
 
-def _smb1_negotiate(host: str, timeout: float = 4.0) -> str | None:
-    """Send SMB1 negotiate and return server response summary."""
+def _raw_negotiate(host: str, timeout: float = 4.0) -> str:
     try:
         s = socket.create_connection((host, 445), timeout=timeout)
         s.settimeout(timeout)
@@ -83,46 +75,71 @@ def _smb1_negotiate(host: str, timeout: float = 4.0) -> str | None:
         resp = s.recv(256)
         s.close()
         if len(resp) < 9:
-            return None
+            return "нет ответа (слишком короткий)"
         if resp[4:8] == b"\xfeSMB":
-            # SMB2 response to our negotiate
-            return "SMBv2/v3 (ответил на SMB2 negotiate)"
+            return "SMBv2/v3"
         if resp[4:8] == b"\xffSMB" and resp[8] == 0x72:
-            # SMB1 negotiate response
-            nt_status = struct.unpack_from("<I", resp, 9)[0]
-            if nt_status == 0:
-                return "SMBv1 (сервер принял SMB1 negotiate)"
-            return f"SMBv1 negotiate — NT Status 0x{nt_status:08x}"
-        return f"Неизвестный ответ: {resp[:8].hex()}"
+            st = struct.unpack_from("<I", resp, 9)[0]
+            return f"SMBv1 (NT Status 0x{st:08x})"
+        return f"неизвестный ответ: {resp[:8].hex()}"
     except socket.timeout:
-        return None
-    except OSError:
-        return None
+        return "нет ответа (timeout)"
+    except OSError as e:
+        return f"ошибка сокета: {e}"
 
 
-# ── smbprotocol probe (SMBv2/3) ───────────────────────────────────────────────
+# ── smbprotocol probe with real credentials ───────────────────────────────────
 
-def _smb2_probe(host: str) -> str:
+def _smb2_probe(host: str, username: str, password: str, domain: str | None) -> str:
     try:
         import smbclient
-        import smbclient._os
-        smbclient.register_session(host, username="guest", password="",
-                                   auth_protocol="ntlm")
-        return "SMBv2/v3 — сессия зарегистрирована (guest)"
+        kwargs: dict = {"username": username, "password": password or "",
+                        "auth_protocol": "ntlm"}
+        if domain:
+            kwargs["auth_protocol"] = "ntlm"
+        smbclient.register_session(host, **kwargs)
+        return "OK — сессия NTLM установлена"
     except Exception as exc:
         msg = str(exc)
+        if "already been registered" in msg.lower():
+            return "уже зарегистрирован (из предыдущей попытки)"
         if "STATUS_LOGON_FAILURE" in msg or "Logon Failure" in msg:
-            return "SMBv2/v3 доступен — ошибка аутентификации (неверные credentials)"
+            return "ОШИБКА АУТЕНТИФИКАЦИИ — неверный логин/пароль"
+        if "STATUS_ACCOUNT_DISABLED" in msg or "0xc0000072" in msg:
+            return "учётная запись отключена на сервере"
         if "STATUS_ACCESS_DENIED" in msg:
-            return "SMBv2/v3 доступен — доступ запрещён для guest"
+            return "доступ запрещён"
+        if "spnego" in msg.lower() or "kerberos" in msg.lower():
+            return f"SPNEGO/Kerberos ошибка (NTLM не принят?): {msg[:120]}"
         if "Connection refused" in msg or "timed out" in msg.lower():
-            return f"SMBv2/v3 — нет соединения: {msg[:80]}"
-        return f"SMBv2/v3 — ошибка: {msg[:120]}"
+            return f"нет соединения: {msg[:80]}"
+        return f"ошибка: {msg[:120]}"
 
 
-# ── nmap probe ────────────────────────────────────────────────────────────────
+# ── smbprotocol list shares ───────────────────────────────────────────────────
 
-def _nmap_probe(host: str) -> str | None:
+def _list_shares(host: str, share: str, path: str,
+                 username: str, password: str) -> str:
+    try:
+        import smbclient
+        unc = f"\\\\{host}\\{share}"
+        if path:
+            unc += "\\" + path.replace("/", "\\").strip("\\")
+        entries = smbclient.listdir(unc)
+        sample = entries[:5]
+        return f"{len(entries)} элементов, первые: {sample}"
+    except Exception as exc:
+        msg = str(exc)
+        if "STATUS_OBJECT_NAME_NOT_FOUND" in msg or "STATUS_OBJECT_PATH_NOT_FOUND" in msg:
+            return f"путь {path!r} не найден в шаре"
+        if "STATUS_ACCESS_DENIED" in msg:
+            return "доступ к шаре запрещён"
+        return f"listdir ошибка: {msg[:120]}"
+
+
+# ── nmap ──────────────────────────────────────────────────────────────────────
+
+def _nmap_smb_protocols(host: str) -> str | None:
     if not shutil.which("nmap"):
         return None
     try:
@@ -131,46 +148,44 @@ def _nmap_probe(host: str) -> str | None:
              "--script-args", "unsafe=1", "-T4", host],
             capture_output=True, text=True, timeout=20,
         )
-        for line in r.stdout.splitlines():
-            line = line.strip()
-            if "SMB" in line or "smb" in line or "dialect" in line.lower():
-                return line
+        lines = [l.strip() for l in r.stdout.splitlines()
+                 if any(k in l for k in ("SMB", "smb", "dialect", "NT LM", "2.", "3."))]
+        return "; ".join(lines) if lines else None
     except Exception:
-        pass
-    return None
+        return None
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    hosts = _collect_hosts()
-    print(f"Диагностика SMB — {len(hosts)} хостов\n{'─'*60}")
+    configs = _collect_smb_configs()
+    print(f"Диагностика SMB — {len(configs)} уникальных шар\n{'─'*64}")
 
-    for host in hosts:
-        print(f"\n{'─'*60}")
-        print(f"Хост: {host}")
+    for smb in configs:
+        host = smb.host
+        print(f"\n{'─'*64}")
+        print(f"  //{host}/{smb.share}  (path: {smb.path!r})")
+        print(f"  user: {smb.username!r}  domain: {smb.domain!r}")
 
         if not _tcp_open(host):
-            print("  TCP 445: ЗАКРЫТ / недоступен")
+            print("  TCP 445      : ЗАКРЫТ / недоступен")
             continue
 
-        print("  TCP 445: открыт")
+        print(f"  TCP 445      : открыт")
+        print(f"  Raw negotiate: {_raw_negotiate(host)}")
 
-        raw = _smb1_negotiate(host)
-        if raw:
-            print(f"  Raw negotiate: {raw}")
-        else:
-            print("  Raw negotiate: нет ответа")
+        probe = _smb2_probe(host, smb.username, smb.password or "", smb.domain)
+        print(f"  NTLM auth    : {probe}")
 
-        smb2 = _smb2_probe(host)
-        print(f"  smbprotocol:   {smb2}")
+        if "OK" in probe:
+            ls = _list_shares(host, smb.share, smb.path, smb.username, smb.password or "")
+            print(f"  Listdir      : {ls}")
 
-        nmap = _nmap_probe(host)
+        nmap = _nmap_smb_protocols(host)
         if nmap:
-            print(f"  nmap:          {nmap}")
+            print(f"  nmap         : {nmap}")
 
-    print(f"\n{'─'*60}")
-    print("Готово.")
+    print(f"\n{'─'*64}\nГотово.")
 
 
 if __name__ == "__main__":
