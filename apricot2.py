@@ -118,6 +118,24 @@ if ssl_enabled:
 
 protocol = "https" if ssl_enabled else "http"
 
+# ── Privileged port check (Linux / macOS) ─────────────────────────────────────
+if sys.platform in ("linux", "darwin") and port < 1024 and os.getuid() != 0:
+    print(
+        f"[server] ОШИБКА: порт {port} требует прав root на Linux/macOS.\n"
+        f"  Варианты решения:\n"
+        f"  1. Используйте порт >= 1024 (например, 8443) в config/settings.yaml\n"
+        f"  2. Разрешите Python слушать привилегированные порты без root:\n"
+        f"       sudo setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))\n"
+        f"  3. Запустите через authbind:\n"
+        f"       sudo apt install authbind\n"
+        f"       sudo touch /etc/authbind/byport/{port}\n"
+        f"       sudo chmod 500 /etc/authbind/byport/{port}\n"
+        f"       sudo chown $USER /etc/authbind/byport/{port}\n"
+        f"       authbind --deep python3 apricot2.py",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 import uvicorn
 
 if __name__ == "__main__":

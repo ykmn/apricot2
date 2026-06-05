@@ -507,6 +507,11 @@ cp /etc/letsencrypt/live/your.domain.com/privkey.pem   ssl/server.key
 
 При запуске сервер автоматически переключается на `https://` и проверяет наличие файлов до старта.
 
+> **Порт 443 на Linux/macOS** требует прав root. Если запускаете от обычного пользователя, используйте порт `8443` в `settings.yaml`, либо разрешите Python слушать привилегированные порты:
+> ```bash
+> sudo setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
+> ```
+
 ---
 
 ## Автоматическое монтирование SMB (Linux / macOS)
@@ -519,13 +524,15 @@ cp /etc/letsencrypt/live/your.domain.com/privkey.pem   ssl/server.key
 
 ### Права для монтирования
 
-**Linux** использует `mount -t cifs` из пакета `cifs-utils`. По умолчанию требуются права `root`. Чтобы разрешить монтирование без пароля, добавьте в `/etc/sudoers` (через `visudo`):
+**Linux** вызывает `mount.cifs` напрямую через `sudo` (без `/bin/mount`). Добавьте в `/etc/sudoers` через `visudo`:
 
 ```
-your_user ALL=(root) NOPASSWD: /sbin/mount.cifs, /bin/umount
+logger ALL=(root) NOPASSWD: /usr/sbin/mount.cifs
 ```
 
-> Или запустите приложение от имени пользователя с правом монтирования (например, в Docker-контейнере с `--privileged`).
+Путь к бинарнику уточните командой `which mount.cifs` — на некоторых системах это `/usr/sbin/mount.cifs`.
+
+> Альтернатива — запустить приложение от `root` (например, в Docker с `--privileged`): в этом случае `sudo` не нужен.
 
 **macOS** использует `mount_smbfs`, который доступен без прав администратора для текущего пользователя.
 
