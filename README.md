@@ -23,6 +23,9 @@ sudo apt install ffmpeg
 
 # Для монтирования SMB-источников
 sudo apt install cifs-utils
+
+# Для smbprotocol (прямое подключение к шарам без mount.cifs — нужен GSSAPI)
+sudo apt install libkrb5-dev
 ```
 
 На Ubuntu 23.04+ и Debian 12+ прямой `pip install` **намеренно заблокирован системой** — используйте виртуальное окружение (см. ниже).

@@ -22,3 +22,9 @@ sortedcontainers>=2.4.0        # SortedList для быстрого поиска
 ldap3>=2.9.1
 # MD4 fallback для NTLM на Python 3.x + OpenSSL 3.x (OpenSSL 3 убрал MD4 из hashlib).
 pycryptodome>=3.19.0
+
+# ── Kerberos / GSSAPI (опционально, Linux) ────────────────────────────────────
+# Нужен smbprotocol при подключении к SMB-шарам без смонтированного mount.cifs.
+# Перед pip install требуется системный пакет:
+#   sudo apt install libkrb5-dev
+gssapi>=1.8.0
