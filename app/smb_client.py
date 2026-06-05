@@ -55,9 +55,18 @@ def _register(smb: SMBConfig) -> None:
 
         smbclient.register_session(smb.host, **kwargs)
     except Exception as exc:
-        # May already be registered — ignore duplicate registration errors
-        if "already been registered" not in str(exc).lower():
-            raise
+        msg = str(exc)
+        # Ignore duplicate registration
+        if "already been registered" in msg.lower():
+            return
+        # SpnegoError / Kerberos errors usually mean the server runs SMBv1 only,
+        # which is unsupported on modern Linux kernels and by smbprotocol (SMBv2+).
+        if "spnego" in msg.lower() or "kerberos" in msg.lower() or "gssapi" in msg.lower():
+            raise RuntimeError(
+                f"Сервер {smb.host!r} недоступен (возможно, поддерживает только SMBv1, "
+                f"который отключён в ядре Linux). Оригинал: {msg}"
+            ) from exc
+        raise
 
 
 # ──────────────────────────────────────────────────────────────────────────────
