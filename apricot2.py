@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Entry point: start the Apricot 2 web server."""
+import os
 import sys
 from pathlib import Path
 
