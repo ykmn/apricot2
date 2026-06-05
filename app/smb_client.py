@@ -8,6 +8,12 @@ from typing import Generator
 
 from .models import SMBConfig
 
+# When gssapi/krb5 are installed, pyspnego tries Kerberos via SPNEGO even
+# with auth_protocol="ntlm".  Pointing KRB5CCNAME at /dev/null makes
+# Kerberos report "no credentials" instantly and fall through to NTLM.
+if os.name != "nt" and "KRB5CCNAME" not in os.environ:
+    os.environ["KRB5CCNAME"] = "FILE:/dev/null"
+
 try:
     import smbclient
     import smbclient.path
