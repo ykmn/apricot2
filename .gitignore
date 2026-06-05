@@ -51,3 +51,6 @@ cache_audio/*
 cache_playlogs/*
 !cache_audio/.gitkeep
 !cache_playlogs/.gitkeep
+
+# SMB-точки монтирования (Linux / macOS, создаются автоматически при запуске)
+mounts/

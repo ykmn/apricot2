@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point: start the Avocado web server."""
+"""Entry point: start the Apricot 2 web server."""
 import sys
 from pathlib import Path
 
@@ -52,6 +52,46 @@ def _validate_configs() -> None:
 
 _validate_configs()
 
+# ── SMB auto-mount (Linux / macOS only) ───────────────────────────────────────
+def _mount_smb_sources() -> None:
+    import sys as _sys
+    if _sys.platform not in ("linux", "darwin"):
+        return
+    try:
+        from app.config import load_stations, load_playlists
+        from app.smb_mount import collect_smb_configs, mount_all, MOUNTS_DIR
+    except ImportError as exc:
+        print(f"[smb_mount] WARNING: не удалось импортировать модуль: {exc}", file=sys.stderr)
+        return
+
+    stations  = load_stations()
+    playlists = load_playlists()
+    configs   = collect_smb_configs(stations, playlists)
+
+    if not configs:
+        return
+
+    platform_name = "Linux" if _sys.platform == "linux" else "macOS"
+    print(f"[smb_mount] Подключение SMB-источников ({platform_name})...")
+
+    results = mount_all(configs)
+    ok = sum(1 for r in results if r.ok)
+    failed = [r for r in results if not r.ok]
+
+    for r in results:
+        status = "✓" if r.ok else "✗"
+        print(f"[smb_mount]   {status} //{r.host}/{r.share}  →  {MOUNTS_DIR / r.host / r.share}  [{r.message}]")
+
+    if failed:
+        print(f"[smb_mount] Предупреждение: {len(failed)} из {len(results)} источников не удалось подключить.",
+              file=sys.stderr)
+        print("[smb_mount] Приложение продолжит работу через smbprotocol.", file=sys.stderr)
+    else:
+        print(f"[smb_mount] OK — подключено/подтверждено {ok} источников")
+
+
+_mount_smb_sources()
+
 from app.config import load_settings
 
 settings = load_settings()
@@ -81,7 +121,7 @@ protocol = "https" if ssl_enabled else "http"
 import uvicorn
 
 if __name__ == "__main__":
-    print(f"Starting Avocado on {protocol}://{host}:{port}")
+    print(f"Starting Абрикос 2 on {protocol}://{host}:{port}")
     uvicorn.run(
         "app.main:app",
         host=host,

@@ -17,7 +17,7 @@ except ImportError:
 
 
 def _unc(smb: SMBConfig, *parts: str) -> str:
-    """Build UNC path: \\host\share\path\parts...
+    r"""Build UNC path: \\host\share\path\parts...
     Forward slashes in any segment are normalised to backslashes so that
     smbprotocol receives a well-formed UNC regardless of how paths are
     written in the YAML config.

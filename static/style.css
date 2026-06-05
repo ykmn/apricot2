@@ -38,46 +38,46 @@
 /* ── Themes ───────────────────────────────────────────────── */
 :root,
 [data-theme="dark"] {
-  --bg: #1a1a2e;
-  --bg2: #16213e;
-  --bg3: #0f3460;
-  --accent: #0f9af0;
-  --accent2: #0ec47a;
-  --danger: #e74c3c;
-  --text: #e0e0e0;
-  --text2: #a0a0b0;
-  --border: #2a2a4a;
-  --cell-present: #1a6bb5;
-  --cell-absent: #1e1e3a;
-  --cell-border: #0a3070;
-  --tl-bg: #1a1a2e;
-  --tl-text: #c0c8e0;
-  --tl-text-dim: #3a4880;
-  --tl-present: #1a6bb5;
-  --tl-absent: #1e1e3a;
-  --center-line: #f0d050;
+  --bg: #0e1c38;
+  --bg2: #122040;
+  --bg3: #1a3260;
+  --accent: #2BA2E0;
+  --accent2: #E59346;
+  --danger: #BD3839;
+  --text: #e4e8f4;
+  --text2: #8090b8;
+  --border: #1e3268;
+  --cell-present: #154A93;
+  --cell-absent: #0e1830;
+  --cell-border: #0a1e48;
+  --tl-bg: #0e1c38;
+  --tl-text: #c0ccdf;
+  --tl-text-dim: #2a4070;
+  --tl-present: #154A93;
+  --tl-absent: #0e1830;
+  --center-line: #E59346;
   --shadow: rgba(0,0,0,0.5);
 }
 
 [data-theme="light"] {
-  --bg: #eef0f5;
+  --bg: #eef1f7;
   --bg2: #ffffff;
-  --bg3: #d8dde8;
-  --accent: #0a7ad4;
-  --accent2: #0aa860;
-  --danger: #d63030;
-  --text: #1a1a2e;
-  --text2: #5060a0;
-  --border: #b8c0d4;
-  --cell-present: #3a9de0;
-  --cell-absent: #dde4f0;
-  --cell-border: #a0b0cc;
-  --tl-bg: #dde4f0;
-  --tl-text: #1a2060;
-  --tl-text-dim: #8090c0;
-  --tl-present: #3a9de0;
-  --tl-absent: #dde4f0;
-  --center-line: #d08000;
+  --bg3: #d8e0ec;
+  --accent: #1a5fb0;
+  --accent2: #c97020;
+  --danger: #BD3839;
+  --text: #0e1c38;
+  --text2: #4060a0;
+  --border: #b0c0d8;
+  --cell-present: #2BA2E0;
+  --cell-absent: #d8e4f4;
+  --cell-border: #90a8c8;
+  --tl-bg: #d8e4f4;
+  --tl-text: #0e1c38;
+  --tl-text-dim: #7090b8;
+  --tl-present: #2BA2E0;
+  --tl-absent: #d8e4f4;
+  --center-line: #c97020;
   --shadow: rgba(0,0,0,0.15);
 }
 
@@ -106,7 +106,7 @@ body {
   justify-content: space-between;
   height: 100px;
   padding: 0 0 0 20px;
-  background: rgba(14, 196, 122, 0.07);
+  background: rgba(229, 147, 70, 0.07);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 10;
@@ -430,17 +430,17 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 }
 
 #status-bar.status-scanning {
-  background: rgba(15, 154, 240, 0.08);
+  background: rgba(43, 162, 224, 0.08);
   color: var(--text2);
 }
 
 #status-bar.status-ready {
-  background: rgba(14, 196, 122, 0.07);
+  background: rgba(229, 147, 70, 0.07);
   color: var(--accent2);
 }
 
 #status-bar.status-error {
-  background: rgba(231, 76, 60, 0.1);
+  background: rgba(189, 56, 57, 0.1);
   color: var(--danger);
 }
 
@@ -620,7 +620,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   transition: background 0.1s;
 }
 .playlist-row:hover { background: rgba(255,255,255,0.04); }
-.playlist-row.active { background: rgba(15,154,240,0.15); }
+.playlist-row.active { background: rgba(43,162,224,0.15); }
 
 .pl-time {
   font-family: monospace;
@@ -772,7 +772,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 }
 
 #btn-hamburger {
-  background: rgba(14, 196, 122, 0.07);
+  background: rgba(229, 147, 70, 0.07);
   border: none;
   border-left: 1px solid var(--border);
   border-radius: 0;
@@ -786,7 +786,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   justify-content: center;
 }
 #btn-hamburger:hover {
-  background: rgba(14, 196, 122, 0.18);
+  background: rgba(229, 147, 70, 0.18);
 }
 
 #hamburger-menu {
@@ -883,7 +883,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   min-height: 22px;
-  background: rgba(14, 196, 122, 0.04);
+  background: rgba(229, 147, 70, 0.04);
   color: var(--text2);
 }
 #playlog-bar.hidden { display: none !important; }
@@ -925,20 +925,20 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 
 /* ── Segment warning ──────────────────────────────────────── */
 #sel-warning {
-  color: #e74c3c;
+  color: #BD3839;
   font-size: 12px;
   font-weight: 600;
-  background: rgba(231,76,60,0.1);
-  border: 1px solid rgba(231,76,60,0.4);
+  background: rgba(189,56,57,0.1);
+  border: 1px solid rgba(189,56,57,0.4);
   border-radius: 4px;
   padding: 3px 8px;
 }
 [data-theme="light"] #sel-warning {
-  background: rgba(214,48,48,0.08);
-  border-color: rgba(214,48,48,0.35);
+  background: rgba(189,56,57,0.08);
+  border-color: rgba(189,56,57,0.35);
 }
 
 /* ── Light theme overrides for hover states ───────────────── */
 [data-theme="light"] .playlist-row:hover { background: rgba(0,0,0,0.05); }
-[data-theme="light"] .playlist-row.active { background: rgba(10,122,212,0.12); }
+[data-theme="light"] .playlist-row.active { background: rgba(26,95,176,0.12); }
 [data-theme="light"] .dropdown-channel:hover { background: var(--bg3); }

@@ -1,4 +1,4 @@
-"""FastAPI application — Авокадо v1.0.000"""
+"""FastAPI application — Абрикос 2"""
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +32,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
 
-log = get_logger("avocado")
+log = get_logger("apricot2")
 
 
 def _build_date() -> str:
@@ -133,7 +133,7 @@ def _progress_callback(data: dict) -> None:
 
 file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
 
-app = FastAPI(title="Авокадо", version=VERSION)
+app = FastAPI(title="Абрикос 2", version=VERSION)
 
 STATIC_DIR = PROJECT_ROOT / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -210,10 +210,10 @@ async def _log_requests(request: Request, call_next):
 @app.on_event("startup")
 async def startup() -> None:
     log.info("*" * 72)
-    log.info("* Авокадо v%s  —  %s", VERSION,
+    log.info("* Абрикос 2 v%s  —  %s", VERSION,
              __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     log.info("*" * 72)
-    log.info("Авокадо v%s starting up", VERSION)
+    log.info("Абрикос 2 v%s starting up", VERSION)
     _auth.load_sessions()
     asyncio.create_task(_background_startup())
 
@@ -361,7 +361,7 @@ async def index() -> FileResponse:
 
 @app.get("/api/version")
 async def get_version() -> dict:
-    return {"version": VERSION, "name": "Авокадо", "build_date": BUILD_DATE}
+    return {"version": VERSION, "name": "Абрикос 2", "build_date": BUILD_DATE}
 
 
 @app.post("/api/rescan_playlogs/{channel_id}")

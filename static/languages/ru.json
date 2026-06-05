@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Авокадо"
+    "title": "Абрикос 2"
   },
   "menu": {
     "hamburger_title": "Меню",
@@ -140,7 +140,7 @@
     "month_11": "дек"
   },
   "login": {
-    "page_title": "Авокадо — Вход",
+    "page_title": "Абрикос 2 — Вход",
     "username_label": "Имя пользователя",
     "domain_hint": "Доменные пользователи:<br><strong>a.pushkin</strong> — поиск во всех настроенных доменах<br><strong>CONTOSO\\a.pushkin</strong> — явное указание домена (несколько доменов)<br><strong>a.pushkin@contoso.local</strong> — по суффиксу UPN",
     "password_label": "Пароль",

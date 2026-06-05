@@ -1,4 +1,4 @@
-# <img src="./static/favicon.svg" width="24"/> Авокадо
+# <img src="./static/apricot.svg" width="24"/> Абрикос 2
 
 Веб-приложение для навигации по записям контроля радиоэфира: поиск нужного момента, выделение фрагментов и экспорт в аудиоформат.
 
@@ -12,11 +12,72 @@
   - Ubuntu/Debian: `apt install ffmpeg`
   - Windows: `winget install -e --id Gyan.FFmpeg`
 
-## Установка
+## Установка Python и pip
+
+### Linux (Ubuntu / Debian)
 
 ```bash
+sudo apt update
+sudo apt install python3 python3-venv
+sudo apt install ffmpeg
+
+# Для монтирования SMB-источников
+sudo apt install cifs-utils
+```
+
+На Ubuntu 23.04+ и Debian 12+ прямой `pip install` **намеренно заблокирован системой** — используйте виртуальное окружение (см. ниже).
+
+### macOS
+
+Рекомендуется установка через [Homebrew](https://brew.sh/):
+
+```bash
+# Установка Homebrew (если ещё не установлен)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Установка Python
+brew install python
+brew install ffmpeg
+```
+
+Альтернатива — официальный установщик с [python.org](https://www.python.org/downloads/).
+
+### Windows
+
+Откройте **PowerShell** и установите всё через winget:
+
+```powershell
+winget install -e --id Python.Python.3.12
+winget install -e --id Gyan.FFmpeg
+```
+
+После установки Python **перезапустите терминал**, чтобы обновился `PATH`, затем проверьте:
+
+```powershell
+python --version
+```
+
+## Установка зависимостей
+
+На всех платформах используйте **виртуальное окружение** — это изолирует пакеты проекта от системного Python и избавляет от ошибки `externally-managed-environment` (Ubuntu 23.04+ / Debian 12+).
+
+```bash
+# 1. Создать окружение (один раз)
+python3 -m venv .venv        # Linux / macOS
+python  -m venv .venv        # Windows
+
+# 2. Активировать окружение (каждый раз перед работой с проектом)
+source .venv/bin/activate    # Linux / macOS
+.venv\Scripts\activate       # Windows (cmd)
+.venv\Scripts\Activate.ps1   # Windows (PowerShell)
+
+# 3. Установить зависимости
 pip install -r requirements.txt
 ```
+
+После активации в начале строки терминала появится префикс `(.venv)`. Команду `python apricot2.py` также нужно выполнять с активированным окружением.
+
+> **Ошибка `externally-managed-environment`** означает, что вы запускаете `pip` вне виртуального окружения на современном Linux. Решение — создать и активировать `.venv` как показано выше. Обходной флаг `--break-system-packages` использовать **не рекомендуется**.
 
 ## Конфигурация
 
@@ -448,13 +509,131 @@ cp /etc/letsencrypt/live/your.domain.com/privkey.pem   ssl/server.key
 
 ---
 
+## Автоматическое монтирование SMB (Linux / macOS)
+
+На Linux и macOS при запуске приложение автоматически монтирует все SMB-источники, настроенные в конфигурации станций и плейлогов. Каждая уникальная шара монтируется в папку `mounts/<host>/<share>/` внутри директории проекта.
+
+Повторный запуск или перезапуск безопасен: перед монтированием проверяется, подключена ли шара уже, и дубликаты не создаются.
+
+Если монтирование завершается с ошибкой (нет прав, хост недоступен и т.п.), приложение выводит предупреждение и продолжает работу, используя `smbprotocol` для доступа к SMB напрямую.
+
+### Права для монтирования
+
+**Linux** использует `mount -t cifs` из пакета `cifs-utils`. По умолчанию требуются права `root`. Чтобы разрешить монтирование без пароля, добавьте в `/etc/sudoers` (через `visudo`):
+
+```
+your_user ALL=(root) NOPASSWD: /sbin/mount.cifs, /bin/umount
+```
+
+> Или запустите приложение от имени пользователя с правом монтирования (например, в Docker-контейнере с `--privileged`).
+
+**macOS** использует `mount_smbfs`, который доступен без прав администратора для текущего пользователя.
+
+### Ручное размонтирование
+
+```bash
+# Linux
+sudo umount mounts/fileserver.domain.local/LOGGER
+
+# macOS
+umount mounts/fileserver.domain.local/LOGGER
+```
+
 ## Запуск
 
 ```bash
-python run.py
+# Linux / macOS — активируйте окружение, если ещё не активировано
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+
+python apricot2.py
 ```
 
 Откройте браузер: **http://localhost:8765** (или **https://localhost:8765** при включённом SSL)
+
+---
+
+## Запуск как системный сервис (Linux, systemd)
+
+Позволяет запускать приложение автоматически при старте системы и перезапускать при сбоях.
+
+### 1. Создайте файл сервиса
+
+Замените `/opt/radio-monitor` на фактический путь к проекту, а `www-data` — на имя пользователя, от которого должно работать приложение.
+
+```bash
+sudo nano /etc/systemd/system/radio-monitor.service
+```
+
+```ini
+[Unit]
+Description=Avocado Radio Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/radio-monitor
+ExecStart=/opt/radio-monitor/.venv/bin/python apricot2.py
+Restart=on-failure
+RestartSec=5
+
+# Логи доступны через: journalctl -u radio-monitor
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+> **Примечание:** `ExecStart` указывает напрямую на Python внутри `.venv` — активировать окружение вручную не нужно.
+
+### 2. Включите и запустите сервис
+
+```bash
+# Перечитать конфигурацию systemd
+sudo systemctl daemon-reload
+
+# Включить автозапуск при старте системы
+sudo systemctl enable radio-monitor
+
+# Запустить прямо сейчас
+sudo systemctl start radio-monitor
+```
+
+### 3. Управление сервисом
+
+```bash
+sudo systemctl status radio-monitor     # статус и последние строки лога
+sudo systemctl stop radio-monitor       # остановить
+sudo systemctl restart radio-monitor    # перезапустить
+sudo systemctl disable radio-monitor    # отключить автозапуск
+```
+
+### 4. Просмотр логов
+
+```bash
+# Последние 100 строк
+journalctl -u radio-monitor -n 100
+
+# В реальном времени
+journalctl -u radio-monitor -f
+
+# За сегодня
+journalctl -u radio-monitor --since today
+```
+
+### Права для монтирования SMB из сервиса
+
+Если приложение запускается не от `root`, для авто-монтирования SMB нужно разрешить пользователю использовать `mount.cifs` без пароля. Добавьте в `/etc/sudoers` через `visudo`:
+
+```
+www-data ALL=(root) NOPASSWD: /sbin/mount.cifs
+```
+
+И обновите `ExecStart` в сервисе, чтобы перед запуском Python выполнялся скрипт с sudo-монтированием. Либо проще: смонтируйте SMB-шары в `/etc/fstab` с опцией `_netdev` — тогда они будут доступны до старта сервиса и авто-монтирование в `apricot2.py` просто подтвердит, что шара уже подключена.
 
 ---
 
@@ -593,6 +772,7 @@ radio-monitor/
 │   ├── auth.py                # Авторизация: сессии, локальные пользователи, LDAP/AD
 │   ├── config.py              # Загрузка YAML-конфигов, разрешение secret.yaml
 │   ├── smb_client.py          # Единый слой доступа: локальный путь или SMB
+│   ├── smb_mount.py           # Авто-монтирование SMB при запуске (Linux / macOS)
 │   ├── file_index.py          # Индекс аудиофайлов в памяти, polling, кэш
 │   ├── audio.py               # Стриминг и экспорт через ffmpeg (copy / transcode)
 │   ├── audio_probe.py         # Автоопределение параметров через ffprobe
@@ -619,9 +799,11 @@ radio-monitor/
 │       └── station2.yaml
 ├── config.demo/               # Демо-конфигурация (пример для копирования в config/)
 ├── export/                    # Экспортированные файлы
+├── mounts/                    # SMB-шары, смонтированные при запуске (Linux / macOS)
+│   └── <host>/<share>/        # Каждая шара — отдельная папка
 ├── cache_audio/               # Кэш индекса аудиофайлов (автогенерируется)
 ├── cache_playlogs/            # Кэш плейлогов по датам (автогенерируется)
 ├── requirements.txt           # Зависимости Python
-└── run.py                     # Точка запуска
+└── apricot2.py                # Точка запуска
 ```
 

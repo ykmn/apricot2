@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Avocado"
+    "title": "Apricot 2"
   },
   "menu": {
     "hamburger_title": "Menu",
@@ -140,7 +140,7 @@
     "month_11": "Dec"
   },
   "login": {
-    "page_title": "Avocado — Login",
+    "page_title": "Apricot 2 — Login",
     "username_label": "Username",
     "domain_hint": "Domain users:<br><strong>a.pushkin</strong> — search across all configured domains<br><strong>CONTOSO\\a.pushkin</strong> — explicit domain (multiple domains)<br><strong>a.pushkin@contoso.local</strong> — by UPN suffix",
     "password_label": "Password",
