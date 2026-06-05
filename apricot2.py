@@ -137,7 +137,42 @@ if sys.platform in ("linux", "darwin") and port < 1024 and os.getuid() != 0:
     )
     sys.exit(1)
 
+import signal
+import socket
 import uvicorn
+
+
+def _kill_port(p: int) -> None:
+    """Kill any process listening on *p* (Linux/macOS only)."""
+    import subprocess, re
+    try:
+        r = subprocess.run(
+            ["ss", "-tlnp", f"sport = :{p}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for pid in re.findall(r"pid=(\d+)", r.stdout):
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+                print(f"[server] Завершён предыдущий процесс pid={pid} на порту {p}")
+            except ProcessLookupError:
+                pass
+    except Exception:
+        pass
+
+
+def _port_busy(h: str, p: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.connect_ex((h if h != "0.0.0.0" else "127.0.0.1", p)) == 0
+
+
+if sys.platform in ("linux", "darwin") and _port_busy(host, port):
+    print(f"[server] Порт {port} занят — завершаю предыдущий процесс...")
+    _kill_port(port)
+    import time; time.sleep(1)
+    if _port_busy(host, port):
+        print(f"[server] ОШИБКА: порт {port} всё ещё занят после SIGTERM.", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     print(f"Starting Абрикос 2 on {protocol}://{host}:{port}")
