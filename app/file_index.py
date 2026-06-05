@@ -122,9 +122,14 @@ class ChannelIndex:
         ext = f".{ch.file_extension.lower()}"
         # scandir returns (name, size) in a single directory query — no per-file stat
         entries = smb.scandir(ch.local_path, ch.smb, folder)
+        if entries:
+            log.debug("_scan_date %s/%s: %d entries (e.g. %r)", ch.id, folder, len(entries), entries[0][0])
         result: dict[str, AudioFile] = {}
+        skipped_ext: list[str] = []
+        skipped_fmt: list[str] = []
         for name, size in entries:
             if not name.lower().endswith(ext):
+                skipped_ext.append(name)
                 continue
             stem = name.rsplit(".", 1)[0]
             try:
@@ -132,6 +137,7 @@ class ChannelIndex:
                     year=d.year, month=d.month, day=d.day
                 )
             except ValueError:
+                skipped_fmt.append(stem)
                 continue
             rel = f"{folder}/{name}"
             dur = _estimate_duration(size, ch.file_extension, ch.sample_rate, ch.bitrate)
@@ -144,6 +150,12 @@ class ChannelIndex:
                 duration=dur,
                 is_smb=ch.smb is not None,
             )
+        if skipped_ext:
+            log.debug("_scan_date %s/%s: %d файлов пропущено (расширение ≠ %s), первый: %r",
+                      ch.id, folder, len(skipped_ext), ext, skipped_ext[0])
+        if skipped_fmt:
+            log.debug("_scan_date %s/%s: %d файлов пропущено (формат ≠ %s), первый: %r",
+                      ch.id, folder, len(skipped_fmt), ch.file_format, skipped_fmt[0])
         return result
 
     def refresh(self, days_back: int = 90, days_ahead: int = 1) -> tuple[list[AudioFile], list[AudioFile]]:

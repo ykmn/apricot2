@@ -35,7 +35,7 @@ def _register(smb: SMBConfig) -> None:
     try:
         kwargs: dict = {}
 
-        protocol = smb.auth_protocol or ("ntlm" if smb.domain else None)
+        protocol = smb.auth_protocol or ("ntlm" if smb.domain else "ntlm")
 
         if protocol == "kerberos":
             # Kerberos uses the current OS ticket — no explicit credentials needed.
@@ -44,8 +44,8 @@ def _register(smb: SMBConfig) -> None:
         else:
             kwargs["username"] = smb.username
             kwargs["password"] = smb.password or ""
-            if smb.domain:
-                kwargs["auth_protocol"] = "ntlm"
+            # Force NTLM to avoid smbprotocol probing Kerberos (requires gssapi).
+            kwargs["auth_protocol"] = "ntlm"
 
         smbclient.register_session(smb.host, **kwargs)
     except Exception as exc:
