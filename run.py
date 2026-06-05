@@ -7,6 +7,51 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
+# ── Pre-flight: validate all YAML config files before launching uvicorn ───────
+def _validate_configs() -> None:
+    """Parse every YAML file in config/ and report errors before server start."""
+    import yaml
+    from app.config import _open_yaml, ConfigError
+
+    config_dir = ROOT / "config"
+    if not config_dir.exists():
+        print("[config] WARNING: config/ directory not found", file=sys.stderr)
+        return
+
+    patterns = [
+        "settings.yaml",
+        "secret.yaml",
+        "ldap.yaml",
+        "users.yaml",
+        "stations/*.yaml",
+        "playlogs/*.yaml",
+    ]
+
+    errors: list[str] = []
+    checked = 0
+    for pattern in patterns:
+        for path in sorted(config_dir.glob(pattern)):
+            checked += 1
+            try:
+                _open_yaml(path)
+            except ConfigError as exc:
+                errors.append(f"  ✗ config/{path.relative_to(config_dir)}: {exc}")
+            except Exception as exc:
+                errors.append(f"  ✗ config/{path.relative_to(config_dir)}: {exc}")
+
+    if errors:
+        print(f"[config] ОШИБКА — {len(errors)} из {checked} файлов не прошли проверку:",
+              file=sys.stderr)
+        for e in errors:
+            print(e, file=sys.stderr)
+        print("\nИсправьте ошибки и перезапустите сервер.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[config] OK — проверено {checked} файл(ов)")
+
+
+_validate_configs()
+
 from app.config import load_settings
 
 settings = load_settings()

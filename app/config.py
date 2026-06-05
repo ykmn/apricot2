@@ -7,6 +7,31 @@ from typing import Any
 
 import yaml
 
+
+def _open_yaml(path: Path) -> Any:
+    """Open and parse a YAML file.
+
+    Tries UTF-8 with BOM first (handles files saved by Windows editors).
+    On UnicodeDecodeError falls back to cp1251 with a warning, then raises
+    a clear ConfigError pointing to the offending file.
+    """
+    for enc in ("utf-8-sig", "cp1251"):
+        try:
+            with path.open(encoding=enc) as fh:
+                return yaml.safe_load(fh)
+        except UnicodeDecodeError:
+            continue
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"{path.name}: YAML syntax error — {exc}") from exc
+    raise ConfigError(
+        f"{path.name}: не удалось прочитать файл — "
+        f"сохраните его как UTF-8 (без BOM или с BOM)"
+    )
+
+
+class ConfigError(ValueError):
+    """Raised when a config file has invalid syntax or encoding."""
+
 from .models import (
     ChannelConfig, PlaylistConfig, PlaylistSource, SMBConfig, StationConfig,
 )
@@ -25,8 +50,7 @@ def _load_secrets() -> dict[int, dict]:
     if not secret_path.exists():
         _secrets = {}
         return _secrets
-    with secret_path.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+    data = _open_yaml(secret_path) or {}
     _secrets = {entry["id"]: entry for entry in data.get("authorization", [])}
     return _secrets
 
@@ -84,8 +108,7 @@ def load_stations() -> dict[str, StationConfig]:
     if not station_dir.exists():
         return stations
     for f in sorted(station_dir.glob("*.yaml")):
-        with f.open(encoding="utf-8") as fh:
-            raw: dict[str, Any] = yaml.safe_load(fh)
+        raw: dict[str, Any] = _open_yaml(f)
         station = StationConfig(
             id=raw["id"],
             name=raw["name"],
@@ -113,8 +136,7 @@ def load_playlists() -> dict[str, PlaylistConfig]:
     if not pl_dir.exists():
         return playlists
     for f in sorted(pl_dir.glob("*.yaml")):
-        with f.open(encoding="utf-8") as fh:
-            raw: dict[str, Any] = yaml.safe_load(fh)
+        raw: dict[str, Any] = _open_yaml(f)
         sources = [
             _parse_playlist_source(s, i)
             for i, s in enumerate(raw.get("sources", []))
@@ -136,5 +158,4 @@ def load_settings() -> dict[str, Any]:
     settings_path = CONFIG_DIR / "settings.yaml"
     if not settings_path.exists():
         return {}
-    with settings_path.open(encoding="utf-8") as fh:
-        return yaml.safe_load(fh) or {}
+    return _open_yaml(settings_path) or {}

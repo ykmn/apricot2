@@ -27,7 +27,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "1.1.001"
+VERSION = "1.1.002"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
