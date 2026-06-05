@@ -17,7 +17,7 @@
     "select_prompt": "Выберите канал ⬇️",
     "filter_placeholder": "Фильтр…",
     "open_list_title": "Открыть список каналов",
-    "copy_path_title_fmt": "Скопировать путь: {path}",
+    "copy_path_title_fmt": "Скопировать путь к аудиофайлам: {path}",
     "copy_path_unavailable": "Путь недоступен",
     "copy_url_title": "Скопировать ссылку на текущее время",
     "path_unavailable_alert": "Путь к папке недоступен для этого канала.",
@@ -78,7 +78,9 @@
   },
   "diag": {
     "title": "Недоступные каналы",
-    "unknown_reason": "причина неизвестна"
+    "unknown_reason": "причина неизвестна",
+    "rescan_btn": "Пересканировать канал",
+    "rescan_btn_running": "Сканирование…"
   },
   "panel": {
     "playlog": "ПЛЕЙЛОГ",

@@ -17,7 +17,7 @@
     "select_prompt": "Select a channel ⬇️",
     "filter_placeholder": "Filter…",
     "open_list_title": "Open channel list",
-    "copy_path_title_fmt": "Copy path: {path}",
+    "copy_path_title_fmt": "Copy path to audio files: {path}",
     "copy_path_unavailable": "Path unavailable",
     "copy_url_title": "Copy link to current time",
     "path_unavailable_alert": "Folder path is unavailable for this channel.",
@@ -78,7 +78,9 @@
   },
   "diag": {
     "title": "Unavailable channels",
-    "unknown_reason": "reason unknown"
+    "unknown_reason": "reason unknown",
+    "rescan_btn": "Rescan channel",
+    "rescan_btn_running": "Scanning…"
   },
   "panel": {
     "playlog": "PLAYLOG",

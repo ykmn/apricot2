@@ -190,6 +190,8 @@ function initChannelSearch() {
   const dd   = document.getElementById('channel-dropdown');
 
   copy.disabled = true;
+  btn.classList.add('no-channel');
+
   copy.addEventListener('click', async () => {
     const path = _channelFolderPath(currentChannel || {});
     if (!path) {
@@ -272,6 +274,7 @@ function selectChannel(ch, st) {
   const copy = document.getElementById('channel-copy-btn');
   inp.value = '';
   inp.placeholder = I18n.t('channel.filter_placeholder');
+  lbl.removeAttribute('data-i18n');
   lbl.textContent = ch.name;
   lbl.title = I18n.t('channel.dblclick_copy_title');
   lbl.ondblclick = () => {
@@ -292,6 +295,7 @@ function selectChannel(ch, st) {
     el.classList.toggle('active', el.dataset.id === ch.id);
   });
   document.getElementById('channel-dropdown').classList.add('hidden');
+  document.getElementById('channel-list-btn').classList.remove('no-channel');
 
   const wasPlaying = isPlaying;
   if (wasPlaying) stopPlay();
@@ -1262,6 +1266,23 @@ function _showDiagPopover(anchor, channels) {
       err.textContent = I18n.t('diag.unknown_reason');
     }
     item.appendChild(err);
+    if (currentUser?.is_admin && c.id) {
+      const btn = document.createElement('button');
+      btn.className = 'diag-rescan-btn';
+      btn.textContent = I18n.t('diag.rescan_btn');
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        btn.disabled = true;
+        btn.textContent = I18n.t('diag.rescan_btn_running');
+        try {
+          await api(`/api/rescan/${c.id}`, { method: 'POST' });
+        } catch (ex) {
+          btn.disabled = false;
+          btn.textContent = I18n.t('diag.rescan_btn');
+        }
+      });
+      item.appendChild(btn);
+    }
     list.appendChild(item);
   });
 
@@ -1451,7 +1472,11 @@ function _reapplyDynamicTexts() {
   // Channel label — only reset to prompt if no channel selected
   if (!currentChannel) {
     const lbl = document.getElementById('channel-label');
-    if (lbl) lbl.textContent = I18n.t('channel.select_prompt');
+    if (lbl) {
+      lbl.setAttribute('data-i18n', 'channel.select_prompt');
+      lbl.textContent = I18n.t('channel.select_prompt');
+    }
+    document.getElementById('channel-list-btn')?.classList.add('no-channel');
   }
 
   // Copy button title

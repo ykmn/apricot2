@@ -17,7 +17,7 @@
     "select_prompt": "Sélectionnez une chaîne ⬇️",
     "filter_placeholder": "Filtrer...",
     "open_list_title": "Ouvrir la liste des chaînes",
-    "copy_path_title_fmt": "Copier le chemin: {path}",
+    "copy_path_title_fmt": "Copier le chemin d'accès aux fichiers audio: {path}",
     "copy_path_unavailable": "Chemin indisponible",
     "copy_url_title": "Copier le lien vers l'instant actuel",
     "path_unavailable_alert": "Le chemin du dossier est indisponible pour cette chaîne.",
@@ -78,7 +78,9 @@
   },
   "diag": {
     "title": "Chaînes indisponibles",
-    "unknown_reason": "raison inconnue"
+    "unknown_reason": "raison inconnue",
+    "rescan_btn": "Rescanner la chaîne",
+    "rescan_btn_running": "Scan en cours…"
   },
   "panel": {
     "playlog": "JOURNAL",
