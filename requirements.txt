@@ -28,3 +28,4 @@ pycryptodome>=3.19.0
 # Перед pip install требуется системный пакет:
 #   sudo apt install libkrb5-dev
 gssapi>=1.8.0
+krb5>=0.5.0
