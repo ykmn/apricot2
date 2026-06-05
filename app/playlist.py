@@ -1,6 +1,7 @@
 """Read playlist log files with priority fallback and per-date disk cache."""
 from __future__ import annotations
 
+import bisect
 import csv
 import io
 import json
@@ -24,6 +25,42 @@ MEM_CACHE_TTL = 300  # seconds — re-read from source after 5 minutes
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+# Default look-back window used by preload()
+PRELOAD_DAYS = 14
+
+
+def preload(
+    configs: list,   # list[PlaylistConfig]
+    days_back: int = PRELOAD_DAYS,
+    progress_cb=None,  # callable(playlist_id, done, total) | None
+) -> None:
+    """Eagerly load and disk-cache playlogs for [today-days_back … today].
+
+    Skips dates that are already on disk.  today's data goes into the
+    short in-memory TTL cache (as usual).  progress_cb is called after
+    each playlist completes all its dates.
+    """
+    today = datetime.now().date()
+    total = len(configs)
+    for done_idx, config in enumerate(configs, 1):
+        for i in range(days_back, -1, -1):   # oldest first so cache fills chronologically
+            d = today - timedelta(days=i)
+            try:
+                _get_date(config, d)
+            except Exception as exc:
+                log.debug("Preload %s %s: %s", config.id, d, exc)
+        log.debug("Preload done: %s (%d/%d)", config.id, done_idx, total)
+        if progress_cb:
+            progress_cb(config.id, done_idx, total)
+
+
+def invalidate_today(playlist_id: str) -> None:
+    """Drop today's in-memory cache so the next request re-reads from the source."""
+    today = datetime.now().date()
+    _mem_cache.pop((playlist_id, today), None)
+    log.debug("Playlog today cache invalidated: %s", playlist_id)
+
+
 def invalidate_recent(playlist_id: str, days: int = 2) -> None:
     """Delete disk cache files and memory cache for the last N days."""
     pl_dir = CACHE_DIR / playlist_id
@@ -40,18 +77,49 @@ def invalidate_recent(playlist_id: str, days: int = 2) -> None:
         _mem_cache.pop((playlist_id, d), None)
 
 
-def check_sources(config: PlaylistConfig, d: date) -> list[dict]:
-    """Try to open each source for date d. Returns [{priority, ok, error}]."""
+def check_sources(config: PlaylistConfig, _unused_date: date = None) -> list[dict]:
+    """Check each source folder.  Returns [{priority, ok, error}].
+
+    Green (ok=True)  — folder is accessible, contains ≥1 .log file,
+                       and at least one file parses into recognisable entries.
+    Red   (ok=False) — folder unreachable, empty, or all files fail to parse.
+    """
     results = []
     for source in sorted(config.sources, key=lambda s: s.priority):
-        filename = d.strftime(source.file_mask)
+        result = _check_source_health(config, source)
+        results.append(result)
+    return results
+
+
+def _check_source_health(config: PlaylistConfig, source: PlaylistSource) -> dict:
+    base = {"priority": source.priority, "ok": False, "error": ""}
+
+    # 1. List the folder — raises if inaccessible
+    try:
+        names = smb.listdir_strict(source.local_path, source.smb)
+    except Exception as exc:
+        base["error"] = str(exc)[:200]
+        return base
+
+    # 2. Find .log files (match the file_mask pattern loosely by extension)
+    log_files = sorted(n for n in names if n.lower().endswith(".log"))
+    if not log_files:
+        base["error"] = "no .log files in folder"
+        return base
+
+    # 3. Try to parse the most recent file; verify it yields entries with expected fields
+    for filename in reversed(log_files):   # most recent last in sorted order
         try:
             raw = smb.read_bytes(source.local_path, source.smb, filename)
-            results.append({"priority": source.priority, "ok": bool(raw), "error": ""})
-        except Exception as exc:
-            results.append({"priority": source.priority, "ok": False,
-                            "error": str(exc)[:200]})
-    return results
+        except Exception:
+            continue
+        entries = _parse(config, source, raw, datetime.now().date())
+        if entries:
+            base["ok"] = True
+            return base
+
+    base["error"] = "files found but none parsed successfully"
+    return base
 
 
 def get_entries(
@@ -100,13 +168,54 @@ def _get_date(config: PlaylistConfig, d: date) -> list[PlaylistEntry]:
 
 
 def _load_with_fallback(config: PlaylistConfig, d: date) -> list[PlaylistEntry]:
-    for source in sorted(config.sources, key=lambda s: s.priority):
+    sources_sorted = sorted(config.sources, key=lambda s: s.priority)
+    if not sources_sorted:
+        return []
+
+    # Load each source independently
+    by_priority: list[tuple[int, list[PlaylistEntry]]] = []
+    for source in sources_sorted:
         entries = _load_source(config, source, d)
         if entries:
             log.debug("Playlist %s date %s: %d entries from priority %d",
                       config.id, d, len(entries), source.priority)
-            return entries
-    return []
+            by_priority.append((source.priority, entries))
+
+    if not by_priority:
+        return []
+    if len(by_priority) == 1:
+        return by_priority[0][1]
+
+    # Merge: priority-1 is the base; fill gaps from lower-priority sources.
+    # GAP_THRESHOLD — минимальный интервал без записей в базе, считающийся пробелом.
+    # DUPE_THRESHOLD — максимальное расхождение между теми же событиями на разных машинах.
+    GAP_THRESHOLD  = 60   # seconds
+    DUPE_THRESHOLD = 5    # seconds — clock skew between broadcast machines
+
+    base = sorted(by_priority[0][1], key=lambda e: e.timestamp)
+    base_times = sorted(e.timestamp for e in base)
+
+    merged = list(base)
+    for _, fallback_entries in by_priority[1:]:
+        for entry in fallback_entries:
+            ts = entry.timestamp
+            # Skip if this is the same event already present in the base
+            # (clock skew between machines is typically < 5s)
+            if any(abs((t - ts).total_seconds()) <= DUPE_THRESHOLD for t in base_times):
+                continue
+            # Include only if the entry falls inside a genuine gap in base data:
+            # both the nearest preceding and the nearest following base entry
+            # are further than GAP_THRESHOLD away.
+            idx = bisect.bisect_left(base_times, ts)
+            gap_before = (ts - base_times[idx - 1]).total_seconds() if idx > 0 else float('inf')
+            gap_after  = (base_times[idx] - ts).total_seconds() if idx < len(base_times) else float('inf')
+            if gap_before >= GAP_THRESHOLD and gap_after >= GAP_THRESHOLD:
+                merged.append(entry)
+
+    merged.sort(key=lambda e: e.timestamp)
+    log.debug("Playlist %s date %s: %d merged entries (%d sources)",
+              config.id, d, len(merged), len(by_priority))
+    return merged
 
 
 # ── Source reader ─────────────────────────────────────────────────────────────

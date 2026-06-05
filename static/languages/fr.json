@@ -21,7 +21,9 @@
     "copy_path_unavailable": "Chemin indisponible",
     "copy_url_title": "Copier le lien vers l'instant actuel",
     "path_unavailable_alert": "Le chemin du dossier est indisponible pour cette chaîne.",
-    "copy_manual_prompt": "Copiez le chemin manuellement :"
+    "copy_manual_prompt": "Copiez le chemin manuellement :",
+    "dblclick_copy_title": "Double-clic pour copier le nom",
+    "copied": "Copié !"
   },
   "transport": {
     "play_title": "Lecture/Pause",
@@ -68,8 +70,11 @@
     "available": "disponible",
     "checking": "vérification…",
     "unavailable_click": "indisponible — cliquez pour le diagnostic",
+    "not_found": "fichier introuvable",
     "updating": "mise à jour…",
-    "files": "{n} fichiers"
+    "files": "{n} fichiers",
+    "files_empty": "aucun fichier",
+    "pl_priority": "Priorité {n}"
   },
   "diag": {
     "title": "Chaînes indisponibles",

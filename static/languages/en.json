@@ -21,7 +21,9 @@
     "copy_path_unavailable": "Path unavailable",
     "copy_url_title": "Copy link to current time",
     "path_unavailable_alert": "Folder path is unavailable for this channel.",
-    "copy_manual_prompt": "Copy the path manually:"
+    "copy_manual_prompt": "Copy the path manually:",
+    "dblclick_copy_title": "Double-click to copy name",
+    "copied": "Copied!"
   },
   "transport": {
     "play_title": "Play / Pause",
@@ -68,8 +70,11 @@
     "available": "available",
     "checking": "checking…",
     "unavailable_click": "unavailable — click for diagnostics",
+    "not_found": "file not found",
     "updating": "updating…",
-    "files": "{n} files"
+    "files": "{n} files",
+    "files_empty": "no files",
+    "pl_priority": "Priority {n}"
   },
   "diag": {
     "title": "Unavailable channels",

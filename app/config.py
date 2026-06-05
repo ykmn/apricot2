@@ -58,6 +58,8 @@ def _parse_smb(raw: dict | None) -> SMBConfig | None:
         password=creds.get("password") or _resolve_password(raw),
         password_env=raw.get("password_env"),
         domain=creds.get("domain") or raw.get("domain"),
+        # auth_protocol: secret overrides smb-block (more specific wins)
+        auth_protocol=creds.get("auth_protocol") or raw.get("auth_protocol"),
     )
 
 

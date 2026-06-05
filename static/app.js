@@ -267,6 +267,14 @@ function selectChannel(ch, st) {
   inp.value = '';
   inp.placeholder = I18n.t('channel.filter_placeholder');
   lbl.textContent = ch.name;
+  lbl.title = I18n.t('channel.dblclick_copy_title');
+  lbl.ondblclick = () => {
+    navigator.clipboard.writeText(ch.name).then(() => {
+      const prev = lbl.textContent;
+      lbl.textContent = I18n.t('channel.copied');
+      setTimeout(() => { lbl.textContent = prev; }, 1200);
+    });
+  };
   const folderPath = _channelFolderPath(ch);
   copy.title = folderPath
     ? I18n.t('channel.copy_path_title_fmt', { path: folderPath })
@@ -1127,11 +1135,11 @@ function _rebuildPlDots() {
 
   _plSources.forEach(s => {
     const dot = document.createElement('span');
-    if (s.checking)   dot.className = 'status-dot rescanning';
-    else if (s.ok)    dot.className = 'status-dot done';
-    else              dot.className = 'status-dot failed';
+    if (s.checking) dot.className = 'status-dot rescanning';
+    else if (s.ok)  dot.className = 'status-dot done';
+    else            dot.className = 'status-dot failed';
 
-    const label = `${_displayName(s.pl_name)} (${I18n.t('dot.files', { n: s.priority })})`;
+    const label = `${_displayName(s.pl_name)} (${I18n.t('dot.pl_priority', { n: s.priority })})`;
     dot.title = s.ok       ? `${label}: ${I18n.t('dot.available')}`
               : s.checking ? `${label}: ${I18n.t('dot.checking')}`
               : `${label}: ${I18n.t('dot.unavailable_click')}`;
@@ -1183,17 +1191,23 @@ function _rebuildDots() {
 
   _statusChannels.forEach(c => {
     const dot = document.createElement('span');
+    const empty = c.done && !c.failed && !c.rescanning && c.files === 0;
     let cls = 'status-dot';
     if (c.rescanning)  cls += ' rescanning';
     else if (c.failed) cls += ' failed';
+    else if (empty)    cls += ' empty';
     else if (c.done)   cls += ' done';
     dot.className = cls;
     dot.title = c.failed     ? `${c.name}: ${I18n.t('dot.unavailable_click')}`
               : c.rescanning ? `${c.name}: ${I18n.t('dot.updating')}`
+              : empty        ? `${c.name}: ${I18n.t('dot.files_empty')}`
               : `${c.name}: ${I18n.t('dot.files', { n: c.files })}`;
-    if (c.failed) {
+    if (c.failed || empty) {
       dot.style.cursor = 'pointer';
-      dot.addEventListener('click', e => { e.stopPropagation(); _showDiagPopover(dot, [c]); });
+      dot.addEventListener('click', e => {
+        e.stopPropagation();
+        _showDiagPopover(dot, [{ name: c.name, error: c.error || I18n.t('dot.files_empty') }]);
+      });
     }
     dots.appendChild(dot);
   });

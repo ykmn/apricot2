@@ -13,6 +13,7 @@ class SMBConfig:
     password: Optional[str] = None
     password_env: Optional[str] = None
     domain: Optional[str] = None
+    auth_protocol: Optional[str] = None   # "ntlm" | "kerberos" | None (auto)
 
 
 @dataclass

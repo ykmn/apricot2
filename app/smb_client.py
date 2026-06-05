@@ -17,9 +17,15 @@ except ImportError:
 
 
 def _unc(smb: SMBConfig, *parts: str) -> str:
-    """Build UNC path: \\host\share\path\parts..."""
+    """Build UNC path: \\host\share\path\parts...
+    Forward slashes in any segment are normalised to backslashes so that
+    smbprotocol receives a well-formed UNC regardless of how paths are
+    written in the YAML config.
+    """
     segments = [smb.path] + list(parts)
-    joined = "\\".join(s.strip("\\/") for s in segments if s)
+    joined = "\\".join(
+        s.replace("/", "\\").strip("\\") for s in segments if s
+    )
     return f"\\\\{smb.host}\\{smb.share}\\{joined}" if joined else f"\\\\{smb.host}\\{smb.share}"
 
 
@@ -27,12 +33,20 @@ def _register(smb: SMBConfig) -> None:
     if not HAS_SMB:
         raise RuntimeError("smbprotocol is not installed. Install it with: pip install smbprotocol")
     try:
-        kwargs: dict = {
-            "username": smb.username,
-            "password": smb.password or "",
-        }
-        if smb.domain:
-            kwargs["auth_protocol"] = "ntlm"
+        kwargs: dict = {}
+
+        protocol = smb.auth_protocol or ("ntlm" if smb.domain else None)
+
+        if protocol == "kerberos":
+            # Kerberos uses the current OS ticket — no explicit credentials needed.
+            # Works for cross-domain access when the machine is domain-joined.
+            kwargs["auth_protocol"] = "kerberos"
+        else:
+            kwargs["username"] = smb.username
+            kwargs["password"] = smb.password or ""
+            if smb.domain:
+                kwargs["auth_protocol"] = "ntlm"
+
         smbclient.register_session(smb.host, **kwargs)
     except Exception as exc:
         # May already be registered — ignore duplicate registration errors
@@ -61,6 +75,37 @@ def listdir(local_path: str | None, smb: SMBConfig | None, rel: str = "") -> lis
     return []
 
 
+def listdir_strict(local_path: str | None, smb: SMBConfig | None, rel: str = "") -> list[str]:
+    """Like listdir but raises on error instead of returning []."""
+    if local_path:
+        p = Path(local_path) / rel if rel else Path(local_path)
+        return [e.name for e in p.iterdir()]   # raises if path missing/inaccessible
+    if smb:
+        _register(smb)
+        return smbclient.listdir(_unc(smb, rel))  # raises on SMB error
+    return []
+
+
+# NtStatus codes / error strings that mean "folder simply does not exist yet" —
+# safe to treat as an empty listing.  Everything else (auth failure, connection
+# error, access denied) is a real problem and must propagate so the caller can
+# mark the channel as failed instead of silently reporting 0 files.
+_FOLDER_NOT_FOUND = (
+    "STATUS_OBJECT_NAME_NOT_FOUND",   # 0xC0000034 — specific path missing
+    "STATUS_OBJECT_PATH_NOT_FOUND",   # 0xC000003A — parent path missing
+    "STATUS_NO_SUCH_FILE",            # 0xC000000F
+    "NtStatus 0xc0000034",
+    "NtStatus 0xc000003a",
+    "NtStatus 0xc000000f",
+    "No such file or directory",
+)
+
+
+def _is_folder_not_found(exc: Exception) -> bool:
+    msg = str(exc)
+    return any(m in msg for m in _FOLDER_NOT_FOUND)
+
+
 def scandir(local_path: str | None, smb_cfg: SMBConfig | None, rel: str = "") -> list[tuple[str, int]]:
     """Return (name, size_bytes) pairs for files in *rel*.
 
@@ -68,6 +113,10 @@ def scandir(local_path: str | None, smb_cfg: SMBConfig | None, rel: str = "") ->
     For SMB: smbclient.scandir returns DirEntry objects whose size is
     already embedded in the directory response; stat(follow_symlinks=False)
     reads it from that cached info without an extra network call.
+
+    Raises on authentication / connection failures so the caller can mark the
+    channel as unreachable.  Returns [] only when the folder genuinely does
+    not exist yet (e.g. today's date folder before the first recording).
     """
     if local_path:
         p = Path(local_path) / rel if rel else Path(local_path)
@@ -88,8 +137,10 @@ def scandir(local_path: str | None, smb_cfg: SMBConfig | None, rel: str = "") ->
                     size = e.stat(follow_symlinks=False).st_size
                 result.append((e.name, size))
             return result
-        except Exception:
-            return []
+        except Exception as exc:
+            if _is_folder_not_found(exc):
+                return []   # date folder not created yet — normal, treat as empty
+            raise           # auth failure, connection error, etc. — caller handles
     return []
 
 

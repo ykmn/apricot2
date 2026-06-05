@@ -20,3 +20,5 @@ sortedcontainers>=2.4.0        # SortedList для быстрого поиска
 # ── Аутентификация (опционально) ───────────────────────────────────────────────
 # Требуется только при LDAP: true в config/ldap.yaml (авторизация через Active Directory)
 ldap3>=2.9.1
+# MD4 fallback для NTLM на Python 3.x + OpenSSL 3.x (OpenSSL 3 убрал MD4 из hashlib).
+pycryptodome>=3.19.0

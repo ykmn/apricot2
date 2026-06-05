@@ -21,8 +21,8 @@ ssl_certfile = None
 ssl_keyfile  = None
 
 if ssl_enabled:
-    cert = ssl_cfg.get("cert", "ssl/cert.pem")
-    key  = ssl_cfg.get("key",  "ssl/key.pem")
+    cert = ssl_cfg.get("cert", "ssl/cert.crt")
+    key  = ssl_cfg.get("key",  "ssl/server.key")
     ssl_certfile = str(ROOT / cert)
     ssl_keyfile  = str(ROOT / key)
     # Validate that the files exist before starting

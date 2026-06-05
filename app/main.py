@@ -27,7 +27,7 @@ from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 
-VERSION = "1.1.000"
+VERSION = "1.1.001"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -67,13 +67,15 @@ playlists_map: dict = {}
 all_channels: list = []
 channels_map: dict = {}
 poll_interval: int = 10
+playlog_refresh_interval: int = 1800   # seconds; overridden by settings.yaml
 _playlog_status: list = []   # last check result, returned by /api/playlog_status
 
 ws_clients: set[WebSocket] = set()
 
 
 def _load_config() -> None:
-    global settings, stations_map, playlists_map, all_channels, channels_map, poll_interval
+    global settings, stations_map, playlists_map, all_channels, channels_map, \
+           poll_interval, playlog_refresh_interval
     settings = load_settings()
     stations_map = load_stations()
     playlists_map = load_playlists()
@@ -82,6 +84,9 @@ def _load_config() -> None:
     all_channels = [ch for st in stations_map.values() for ch in st.channels]
     channels_map = {ch.id: ch for ch in all_channels}
     poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
+    playlog_refresh_interval = int(
+        settings.get("playlogs", {}).get("today_refresh_interval", 1800)
+    )
     _auth.configure(
         session_ttl=int(settings.get("server", {}).get("session_ttl", 7 * 24 * 3600)),
     )
@@ -220,25 +225,51 @@ async def _background_startup() -> None:
         log.error("Initial scan failed: %s", exc)
     file_index.start_polling()
     asyncio.create_task(_export_cleanup_loop())
-    asyncio.create_task(_check_playlogs())
+    asyncio.create_task(_preload_playlogs())
+    asyncio.create_task(_playlog_today_refresh_loop())
 
 
-async def _check_playlogs() -> None:
-    """Check each playlog source for yesterday's file and broadcast results."""
+async def _preload_playlogs() -> None:
+    """Preload and cache playlogs for the last PRELOAD_DAYS days, then broadcast source status."""
     global _playlog_status
     from datetime import timedelta
-    from .playlist import check_sources
-    check_date = (datetime.now() - timedelta(days=1)).date()
+    from .playlist import check_sources, preload, PRELOAD_DAYS
+
+    configs = list(playlists_map.values())
+    if not configs:
+        return
+
     _broadcast_raw(json.dumps({"type": "playlog_checking"}))
+
+    def _run_preload():
+        preload(configs, days_back=PRELOAD_DAYS)
+
+    await asyncio.to_thread(_run_preload)
+
+    # Check per-source folder health for the status bar
     results = []
-    for pl_cfg in playlists_map.values():
-        src = await asyncio.to_thread(check_sources, pl_cfg, check_date)
+    for pl_cfg in configs:
+        src = await asyncio.to_thread(check_sources, pl_cfg)
         results.append({"id": pl_cfg.id, "name": pl_cfg.name, "sources": src})
+
     _playlog_status = results
     _broadcast_raw(json.dumps({"type": "playlog_status", "playlogs": results}))
     ok  = sum(1 for pl in results for s in pl["sources"] if s["ok"])
     bad = sum(1 for pl in results for s in pl["sources"] if not s["ok"])
-    log.info("Playlog check done: %d ok, %d unavailable (date=%s)", ok, bad, check_date)
+    log.info("Playlog preload done (%d days): %d ok, %d unavailable", PRELOAD_DAYS, ok, bad)
+
+
+async def _playlog_today_refresh_loop() -> None:
+    """Periodically drop today's in-memory playlog cache so the next request re-reads the source."""
+    from .playlist import invalidate_today
+    while True:
+        await asyncio.sleep(playlog_refresh_interval)
+        configs = list(playlists_map.values())
+        if not configs:
+            continue
+        for cfg in configs:
+            await asyncio.to_thread(invalidate_today, cfg.id)
+        log.info("Playlog today cache refreshed (%d playlist(s))", len(configs))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -353,7 +384,7 @@ async def rescan_playlogs(channel_id: str) -> dict:
         invalidate_recent(pl_id)
     log.info("Playlog cache invalidated for %d playlist(s) (station of %s)", len(pl_ids), channel_id)
 
-    asyncio.create_task(_check_playlogs())
+    asyncio.create_task(_preload_playlogs())
     return {"ok": True, "playlists": list(pl_ids)}
 
 
@@ -698,7 +729,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         while True:
             await asyncio.sleep(30)
             await ws.send_text(json.dumps({"type": "ping"}))
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         ws_clients.discard(ws)

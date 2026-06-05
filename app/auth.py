@@ -12,12 +12,41 @@ Multi-domain support:
 """
 from __future__ import annotations
 
+import hashlib
 import secrets
 import time
 from pathlib import Path
 from typing import Optional
 
 import yaml
+
+# ── MD4 patch for OpenSSL 3.x ────────────────────────────────────────────────
+# OpenSSL 3.0 removed MD4, which ldap3 needs for NTLM hashing.
+# Patch hashlib.new() to serve MD4 via pycryptodome when the system OpenSSL
+# cannot provide it. This must happen before ldap3 is imported.
+def _patch_md4() -> None:
+    try:
+        hashlib.new("md4", b"")
+        return  # already works — nothing to do
+    except ValueError:
+        pass
+    try:
+        from Crypto.Hash import MD4 as _CryptoMD4
+
+        _orig_new = hashlib.new
+
+        def _patched_new(name: str, *args, **kwargs):
+            if name.lower() == "md4":
+                data = args[0] if args else kwargs.get("data", b"")
+                return _CryptoMD4.new(data)
+            return _orig_new(name, *args, **kwargs)
+
+        hashlib.new = _patched_new  # type: ignore[assignment]
+    except ImportError:
+        pass  # pycryptodome not installed — ldap3 will fail with its own error
+
+
+_patch_md4()
 
 
 # ── Auth exception hierarchy ──────────────────────────────────────────────────
@@ -357,8 +386,8 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
         if not pwd_ok:
             raise _LdapTaggedError(
                 _TAG_WRONG_PWD,
-                f"Неверный пароль для пользователя «{short_name}» "
-                f"в домене {domain_label}.",
+                f"Неверный пароль для пользователя «{short_name}» ",
+#                f"в домене {domain_label}.",
             )
         user_conn.unbind()
 
@@ -412,9 +441,8 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
         allowed = ", ".join((admin_groups + access_groups)[:3])
         raise _LdapTaggedError(
             _TAG_NO_ACCESS,
-            f"Пользователь «{short_name}» успешно аутентифицирован в "
-            f"{domain_label}, но не входит ни в одну из групп с доступом.\n"
-            f"Необходимые группы (первые три): {allowed}\n"
+            f"Пользователь «{short_name}» успешно аутентифицирован,"
+            f"но не входит ни в одну из групп с правами доступа.\n"
             f"Обратитесь к администратору для получения доступа.",
         )
 
@@ -451,8 +479,8 @@ def _authenticate_ldap(username: str, password: str, cfg: dict) -> dict:
                 for d in all_domains
             )
             raise LdapAuthError(
-                f"Домен «{domain_hint}» не найден в конфигурации ldap.yaml.\n"
-                f"Настроенные домены: {known}"
+                f"Домен «{domain_hint}» не найден в доменах.\n"
+#                f"Настроенные домены: {known}"
             )
     else:
         candidates = all_domains
@@ -462,7 +490,7 @@ def _authenticate_ldap(username: str, password: str, cfg: dict) -> dict:
 
     last_error: Optional[_LdapTaggedError] = None
     not_found_domains: list[str] = []
-    conn_errors: list[str] = []
+    conn_errors: list[tuple[str, str]] = []   # (label, detail)
 
     for dcfg in candidates:
         try:
@@ -477,18 +505,21 @@ def _authenticate_ldap(username: str, password: str, cfg: dict) -> dict:
             if exc.tag == _TAG_NOT_FOUND:
                 not_found_domains.append(label)
             else:
-                conn_errors.append(label)
+                conn_errors.append((label, str(exc)))
 
     # All domains exhausted without success
     parts: list[str] = []
+    if conn_errors:
+        lines = ["Не удалось подключиться к AD-серверу(-ам):"]
+        for label, detail in conn_errors:
+            # _authenticate_one_domain already embeds [label] in the message,
+            # so just indent the full detail for readability.
+            lines.append(f"  • {detail}")
+        parts.append("\n".join(lines))
     if not_found_domains:
         parts.append(
-            f"Пользователь «{short_name}» не найден в домен(ах): "
-            + ", ".join(not_found_domains)
-        )
-    if conn_errors:
-        parts.append(
-            "Не удалось подключиться к серверам: " + ", ".join(conn_errors)
+            f"Пользователь «{short_name}» не найден."
+#            + ", ".join(not_found_domains)
         )
 
     if not parts and last_error:

@@ -21,7 +21,9 @@
     "copy_path_unavailable": "Путь недоступен",
     "copy_url_title": "Скопировать ссылку на текущее время",
     "path_unavailable_alert": "Путь к папке недоступен для этого канала.",
-    "copy_manual_prompt": "Скопируйте путь вручную:"
+    "copy_manual_prompt": "Скопируйте путь вручную:",
+    "dblclick_copy_title": "Двойной клик — скопировать название",
+    "copied": "Скопировано!"
   },
   "transport": {
     "play_title": "Воспроизвести / Пауза",
@@ -68,8 +70,11 @@
     "available": "доступен",
     "checking": "проверяется…",
     "unavailable_click": "недоступен — нажмите для диагностики",
+    "not_found": "файл отсутствует",
     "updating": "обновляется…",
-    "files": "{n} файлов"
+    "files": "{n} файлов",
+    "files_empty": "нет файлов",
+    "pl_priority": "Приоритет {n}"
   },
   "diag": {
     "title": "Недоступные каналы",
