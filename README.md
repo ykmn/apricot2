@@ -122,9 +122,9 @@ authorization:
     password: "another_pass"
     domain: "CONTOSO"
   - id: 3
-    username: "r.ermakov"
+    username: "user1"
     password: "..."
-    domain: "EURMSK"
+    domain: "EVILCORP"
     auth_protocol: "kerberos"   # кросс-доменный доступ: использует тикет OS
 ```
 
@@ -161,7 +161,7 @@ channels:
     folder_format: "%Y-%m-%d"
     file_format: "%H-%M-%S"
     file_extension: "mp3"
-    sample_rate: 44100
+    sample_rate: 48000
     playlogs:
       - retrofm
 ```
@@ -561,10 +561,10 @@ python apricot2.py
 
 ### 1. Создайте файл сервиса
 
-Замените `/opt/radio-monitor` на фактический путь к проекту, а `www-data` — на имя пользователя, от которого должно работать приложение.
+Замените `/opt/apricot2` на фактический путь к проекту, а `www-data` — на имя пользователя, от которого должно работать приложение.
 
 ```bash
-sudo nano /etc/systemd/system/radio-monitor.service
+sudo nano /etc/systemd/system/apricot2.service
 ```
 
 ```ini
@@ -575,12 +575,12 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/radio-monitor
-ExecStart=/opt/radio-monitor/.venv/bin/python apricot2.py
+WorkingDirectory=/opt/apricot2
+ExecStart=/opt/apricot2/.venv/bin/python apricot2.py
 Restart=on-failure
 RestartSec=5
 
-# Логи доступны через: journalctl -u radio-monitor
+# Логи доступны через: journalctl -u apricot2
 StandardOutput=journal
 StandardError=journal
 
@@ -597,32 +597,32 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 
 # Включить автозапуск при старте системы
-sudo systemctl enable radio-monitor
+sudo systemctl enable apricot2
 
 # Запустить прямо сейчас
-sudo systemctl start radio-monitor
+sudo systemctl start apricot2
 ```
 
 ### 3. Управление сервисом
 
 ```bash
-sudo systemctl status radio-monitor     # статус и последние строки лога
-sudo systemctl stop radio-monitor       # остановить
-sudo systemctl restart radio-monitor    # перезапустить
-sudo systemctl disable radio-monitor    # отключить автозапуск
+sudo systemctl status apricot2     # статус и последние строки лога
+sudo systemctl stop apricot2       # остановить
+sudo systemctl restart apricot2    # перезапустить
+sudo systemctl disable apricot2    # отключить автозапуск
 ```
 
 ### 4. Просмотр логов
 
 ```bash
 # Последние 100 строк
-journalctl -u radio-monitor -n 100
+journalctl -u apricot2 -n 100
 
 # В реальном времени
-journalctl -u radio-monitor -f
+journalctl -u apricot2 -f
 
 # За сегодня
-journalctl -u radio-monitor --since today
+journalctl -u apricot2 --since today
 ```
 
 ### Права для монтирования SMB из сервиса
@@ -766,7 +766,7 @@ www-data ALL=(root) NOPASSWD: /sbin/mount.cifs
 ## Архитектура
 
 ```
-radio-monitor/
+apricot2/
 ├── app/
 │   ├── main.py                # FastAPI-приложение, REST API, WebSocket, auth-middleware
 │   ├── auth.py                # Авторизация: сессии, локальные пользователи, LDAP/AD
