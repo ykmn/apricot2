@@ -183,12 +183,30 @@ def _collect_unique(smb_configs: list[SMBConfig]) -> list[SMBConfig]:
     return result
 
 
+def _cleanup_stale_mounts() -> None:
+    """Lazy-unmount directories in MOUNTS_DIR that exist but are not in /proc/mounts.
+
+    These are left over from a previous run that was killed or crashed without
+    a clean unmount.  Cleaning them up before mounting avoids error(16).
+    """
+    if not MOUNTS_DIR.exists():
+        return
+    for host_dir in MOUNTS_DIR.iterdir():
+        if not host_dir.is_dir():
+            continue
+        for share_dir in host_dir.iterdir():
+            if share_dir.is_dir() and not _is_mounted(share_dir):
+                # Directory exists but nothing is mounted — stale stub.
+                _umount_lazy(share_dir)
+
+
 def mount_all(smb_configs: list[SMBConfig]) -> list[MountResult]:
     """Mount all unique SMB shares. Returns results for logging."""
     if not SUPPORTED or not smb_configs:
         return []
 
     MOUNTS_DIR.mkdir(parents=True, exist_ok=True)
+    _cleanup_stale_mounts()
 
     results: list[MountResult] = []
     needs_sudoers = False
