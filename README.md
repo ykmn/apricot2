@@ -561,7 +561,7 @@ python apricot2.py
 
 ### 1. Создайте файл сервиса
 
-Замените `/opt/apricot2` на фактический путь к проекту, а `www-data` — на имя пользователя, от которого должно работать приложение.
+Предполагается, что проект находится в домашней папке пользователя `~/apricot2`. Замените `logger` на своё имя пользователя.
 
 ```bash
 sudo nano /etc/systemd/system/apricot2.service
@@ -569,14 +569,14 @@ sudo nano /etc/systemd/system/apricot2.service
 
 ```ini
 [Unit]
-Description=Avocado Radio Monitor
+Description=Абрикос 2 — веб-интерфейс контроля радиоэфира
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/opt/apricot2
-ExecStart=/opt/apricot2/.venv/bin/python apricot2.py
+User=logger
+WorkingDirectory=/home/logger/apricot2
+ExecStart=/home/logger/apricot2/.venv/bin/python apricot2.py
 Restart=on-failure
 RestartSec=5
 
@@ -630,10 +630,10 @@ journalctl -u apricot2 --since today
 Если приложение запускается не от `root`, для авто-монтирования SMB нужно разрешить пользователю использовать `mount.cifs` без пароля. Добавьте в `/etc/sudoers` через `visudo`:
 
 ```
-www-data ALL=(root) NOPASSWD: /sbin/mount.cifs
+logger ALL=(root) NOPASSWD: /sbin/mount.cifs
 ```
 
-И обновите `ExecStart` в сервисе, чтобы перед запуском Python выполнялся скрипт с sudo-монтированием. Либо проще: смонтируйте SMB-шары в `/etc/fstab` с опцией `_netdev` — тогда они будут доступны до старта сервиса и авто-монтирование в `apricot2.py` просто подтвердит, что шара уже подключена.
+Либо смонтируйте SMB-шары через `/etc/fstab` с опцией `_netdev` — тогда они будут доступны до старта сервиса и авто-монтирование в `apricot2.py` просто подтвердит, что шара уже подключена.
 
 ---
 
