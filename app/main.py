@@ -26,6 +26,7 @@ from .audio import export_audio, set_ffmpeg_path, stream_audio
 from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
+from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
 VERSION = "1.1.004"
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -33,6 +34,29 @@ EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
 
 log = get_logger("apricot2")
+
+
+def _apply_smb_mounts(channels: list, playlists_map: dict) -> None:
+    """For every SMB source whose share is already mounted, replace smb: with local_path."""
+    if not _SMB_SUPPORTED:
+        return
+
+    def _patch(obj) -> None:
+        """Set local_path on obj if its smb share is mounted and local_path not already set."""
+        if not obj.smb or obj.local_path:
+            return
+        mp = MOUNTS_DIR / obj.smb.host / obj.smb.share
+        if not _is_mounted(mp):
+            return
+        local = mp / obj.smb.path if obj.smb.path else mp
+        obj.local_path = str(local)
+        log.info("Using local mount for %s → %s", f"//{obj.smb.host}/{obj.smb.share}/{obj.smb.path}", obj.local_path)
+
+    for ch in channels:
+        _patch(ch)
+    for pl in playlists_map.values():
+        for src in pl.sources:
+            _patch(src)
 
 
 def _build_date() -> str:
@@ -82,6 +106,7 @@ def _load_config() -> None:
     if ffmpeg := settings.get("ffmpeg_path"):
         set_ffmpeg_path(ffmpeg)
     all_channels = [ch for st in stations_map.values() for ch in st.channels]
+    _apply_smb_mounts(all_channels, playlists_map)
     channels_map = {ch.id: ch for ch in all_channels}
     poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
     playlog_refresh_interval = int(
