@@ -162,7 +162,7 @@ async def _stage_files(
     paths = []
     loop = asyncio.get_event_loop()
     for i, af in enumerate(files):
-        if not af.is_smb:
+        if not af.is_smb or channel.local_path:
             paths.append(af.path)
         else:
             ext = channel.file_extension
