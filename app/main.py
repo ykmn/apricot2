@@ -41,16 +41,28 @@ def _apply_smb_mounts(channels: list, playlists_map: dict) -> None:
     if not _SMB_SUPPORTED:
         return
 
+    # Build case-insensitive index of existing mount dirs: (host_lower, share_lower) → Path
+    _mount_index: dict[tuple[str, str], Path] = {}
+    if MOUNTS_DIR.exists():
+        for host_dir in MOUNTS_DIR.iterdir():
+            if not host_dir.is_dir():
+                continue
+            for share_dir in host_dir.iterdir():
+                if _is_mounted(share_dir):
+                    _mount_index[(host_dir.name.lower(), share_dir.name.lower())] = share_dir
+
     def _patch(obj) -> None:
         """Set local_path on obj if its smb share is mounted and local_path not already set."""
         if not obj.smb or obj.local_path:
             return
-        mp = MOUNTS_DIR / obj.smb.host / obj.smb.share
-        if not _is_mounted(mp):
+        key = (obj.smb.host.lower(), obj.smb.share.lower())
+        mp = _mount_index.get(key)
+        if mp is None:
             return
         local = mp / obj.smb.path if obj.smb.path else mp
         obj.local_path = str(local)
-        log.info("Using local mount for %s → %s", f"//{obj.smb.host}/{obj.smb.share}/{obj.smb.path}", obj.local_path)
+        log.info("Using local mount for //%s/%s/%s → %s",
+                 obj.smb.host, obj.smb.share, obj.smb.path, obj.local_path)
 
     for ch in channels:
         _patch(ch)
