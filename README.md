@@ -510,10 +510,25 @@ cp /etc/letsencrypt/live/your.domain.com/privkey.pem   ssl/server.key
 
 При запуске сервер автоматически переключается на `https://` и проверяет наличие файлов до старта.
 
-> **Порт 443 на Linux/macOS** требует прав root. Если запускаете от обычного пользователя, используйте порт `8443` в `settings.yaml`, либо разрешите Python слушать привилегированные порты:
+> **Порт 443 на Linux/macOS** требует прав root. Если запускаете от обычного пользователя, есть три варианта:
+>
+> **Вариант 1 — authbind** (рекомендуется):
 > ```bash
-> sudo setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
+> sudo apt install authbind
+> sudo touch /etc/authbind/byport/443
+> sudo chmod 500 /etc/authbind/byport/443
+> sudo chown logger /etc/authbind/byport/443
+>
+> authbind --deep /home/logger/apricot2/venv/bin/python3 apricot2.py
 > ```
+> Замените `logger` на своё имя пользователя и путь к venv при необходимости.
+>
+> **Вариант 2 — setcap**:
+> ```bash
+> sudo setcap 'cap_net_bind_service=+ep' $(readlink -f /home/logger/apricot2/venv/bin/python3)
+> ```
+>
+> **Вариант 3** — использовать порт `8443` в `config/settings.yaml`.
 
 ---
 
@@ -586,7 +601,7 @@ After=network.target
 Type=simple
 User=logger
 WorkingDirectory=/home/logger/apricot2
-ExecStart=/home/logger/apricot2/.venv/bin/python apricot2.py
+ExecStart=/home/logger/apricot2/venv/bin/python3 apricot2.py
 Restart=on-failure
 RestartSec=5
 
@@ -598,7 +613,13 @@ StandardError=journal
 WantedBy=multi-user.target
 ```
 
-> **Примечание:** `ExecStart` указывает напрямую на Python внутри `.venv` — активировать окружение вручную не нужно.
+> **Примечание:** `ExecStart` указывает напрямую на Python внутри `venv` — активировать окружение вручную не нужно.
+
+> **Порт 443 из systemd:** если приложение слушает порт 443, добавьте в секцию `[Service]`:
+> ```ini
+> ExecStart=/usr/bin/authbind --deep /home/logger/apricot2/venv/bin/python3 apricot2.py
+> ```
+> Предварительно настройте authbind (см. раздел [HTTPS](#https)).
 
 ### 2. Включите и запустите сервис
 
