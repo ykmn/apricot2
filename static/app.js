@@ -477,8 +477,11 @@ function togglePlay() {
 function startPlay() {
   const ts = Timeline.getCenterTime();
   const { start: selS, end: selE } = Timeline.getSelection();
-  const startTs = (selS !== null) ? selS : ts;
-  const endTs   = (selE !== null) ? selE : startTs + 3600;
+  // Always start from the current timeline position.
+  // Use the selection end as the stop point only when the timeline is within
+  // the selection; otherwise fall back to +1 hour.
+  const startTs = ts;
+  const endTs   = (selE !== null && ts <= selE) ? selE : startTs + 3600;
 
   isPlaying  = true;
   playFromTs = startTs;
