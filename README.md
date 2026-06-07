@@ -602,8 +602,8 @@ Type=simple
 User=logger
 WorkingDirectory=/home/logger/apricot2
 ExecStart=/home/logger/apricot2/venv/bin/python3 apricot2.py
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=2
 
 # Логи доступны через: journalctl -u apricot2
 StandardOutput=journal
@@ -614,6 +614,8 @@ WantedBy=multi-user.target
 ```
 
 > **Примечание:** `ExecStart` указывает напрямую на Python внутри `venv` — активировать окружение вручную не нужно.
+
+> **`Restart=always`** — обязательно при использовании кнопки «Перезапустить сервер» в меню ☰. Приложение завершается с кодом 0, а `Restart=on-failure` код 0 не считает сбоем и процесс не перезапускает.
 
 > **Порт 443 из systemd:** если приложение слушает порт 443, добавьте в секцию `[Service]`:
 > ```ini
