@@ -85,7 +85,7 @@
   "panel": {
     "playlog": "PLAYLOG",
     "segments": "SELECTED FRAGMENTS",
-    "segments_empty_hint": "Select a recording channel from the list.\n\nButtons to the right of the channel list:\n⧉ — copy the path to the server with the physical audio files\n# — copy a link to the selected channel and time\n\nClock: select the time you need by left/right-clicking on the date and hour fields, or scroll the timeline with the mouse wheel.\n\nSet the fragment start with the In button.\nSet the fragment end with the Out button.\nAdd the fragment to the selected list.\n\nClick «Export», choose the format, and download the audio file.\n\nMultiple selected fragments can be downloaded at once with the «Download all» button."
+    "segments_empty_hint": "Select a <b>recording channel</b> from the list.\n\n<b>Buttons</b> to the right of the channel list:\n⧉ — copy the path to the server with the physical audio files\n# — copy a link to the selected channel and time\n\nClock: select the date-time you need by left/right-clicking on the date and hour fields, or scroll the timeline with the mouse wheel.\n\nSet the <b>fragment</b> start with the In button.\nSet the fragment end with the Out button.\nAdd the fragment to the selected list.\n\nClick «Export», choose the format, and download the audio file.\n\nMultiple selected fragments can be downloaded at once with the «Download all» button."
   },
   "btn": {
     "download_all": "Download all",
