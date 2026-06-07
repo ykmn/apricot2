@@ -638,7 +638,7 @@ function renderLogList() {
   if (logItems.length === 0) {
     const hint = document.createElement('div');
     hint.className = 'loglist-empty-hint';
-    hint.textContent = I18n.t('panel.segments_empty_hint');
+    hint.innerHTML = I18n.t('panel.segments_empty_hint');
     container.appendChild(hint);
     return;
   }
