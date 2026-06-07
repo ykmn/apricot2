@@ -81,14 +81,22 @@ async def stream_audio(
         ss = max(0.0, (start - first_file.start_dt).total_seconds())
         to = (end - first_file.start_dt).total_seconds()  # relative to first file start
 
+        # Auto copy-mode: mp3 and aac don't need re-encoding for streaming;
+        # wav sources are always transcoded to mp3 for browser compatibility.
+        native_ext = channel.file_extension.lower()
+        if not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
+            copy_mode = True
+
         cmd = [
             FFMPEG,
             "-y",
+            # Input seeking (-ss before -i) — ffmpeg jumps at container level,
+            # avoiding decoding frames from the beginning of the file.
+            "-ss", str(ss),
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list),
-            "-ss", str(ss),
-            "-to", str(to),
+            "-to", str(to - ss),  # -to is relative to -ss when seek is input-side
             "-vn",
         ]
 

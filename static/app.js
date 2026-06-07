@@ -522,7 +522,7 @@ function _debouncedSeek(ts) {
   // Immediately freeze animation so the user sees their scroll position
   _seekPending = true;
   clearTimeout(_seekTimer);
-  _seekTimer = setTimeout(() => _seekPlayback(ts), 250);
+  _seekTimer = setTimeout(() => _seekPlayback(ts), 150);
 }
 
 function _seekPlayback(ts) {
