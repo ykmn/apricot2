@@ -72,14 +72,11 @@ async def stream_audio(
             return
 
         concat_list = Path(tmpdir) / "concat.txt"
-        with concat_list.open("w") as f:
-            for p in input_paths:
-                f.write(f"file '{p}'\n")
 
-        # Calculate trim offsets
+        # Calculate trim offsets relative to the first file's start time.
         first_file = files[0]
+        last_file  = files[-1]
         ss = max(0.0, (start - first_file.start_dt).total_seconds())
-        to = (end - first_file.start_dt).total_seconds()  # relative to first file start
 
         # Auto copy-mode: mp3 and aac don't need re-encoding for streaming;
         # wav sources are always transcoded to mp3 for browser compatibility.
@@ -87,16 +84,25 @@ async def stream_audio(
         if not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
             copy_mode = True
 
+        # Use inpoint/outpoint directives in the concat script — the concat
+        # demuxer honours them for fast seeking without decoding from the start.
+        # This is correct unlike -ss before -i (which concat demuxer ignores).
+        last_file_duration = (end - last_file.start_dt).total_seconds()
+        with concat_list.open("w") as f:
+            f.write("ffconcat version 1.0\n")
+            for idx_f, p in enumerate(input_paths):
+                f.write(f"file '{p}'\n")
+                if idx_f == 0 and ss > 0:
+                    f.write(f"inpoint {ss}\n")
+                if idx_f == len(input_paths) - 1:
+                    f.write(f"outpoint {last_file_duration}\n")
+
         cmd = [
             FFMPEG,
             "-y",
-            # Input seeking (-ss before -i) — ffmpeg jumps at container level,
-            # avoiding decoding frames from the beginning of the file.
-            "-ss", str(ss),
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list),
-            "-to", str(to - ss),  # -to is relative to -ss when seek is input-side
             "-vn",
         ]
 
