@@ -39,7 +39,8 @@ const I18n = (() => {
 
   async function _load(lang) {
     if (!_cache[lang]) {
-      const resp = await fetch(`/static/languages/${lang}.json`);
+      const v = window.__APP_VERSION__ || '0';
+      const resp = await fetch(`/static/languages/${lang}.json?v=${v}`);
       if (!resp.ok) throw new Error(`i18n: failed to load ${lang}`);
       _cache[lang] = await resp.json();
     }

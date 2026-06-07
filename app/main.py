@@ -15,7 +15,7 @@ from typing import Any
 import aiofiles
 from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import auth as _auth
@@ -313,9 +313,32 @@ async def _playlog_today_refresh_loop() -> None:
 # Auth endpoints
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _html_response(filename: str) -> HTMLResponse:
+    """Serve an HTML file with ?v=VERSION cache-busting on static assets.
+
+    The HTML itself is sent with Cache-Control: no-store so the browser
+    always fetches a fresh copy, picks up the new ?v= query string, and
+    therefore reloads JS/CSS/JSON when the version changes.
+    """
+    text = (STATIC_DIR / filename).read_text(encoding="utf-8")
+    # Inject app version so JS can use it for cache-busting fetch() calls.
+    text = text.replace(
+        "</head>",
+        f'<script>window.__APP_VERSION__="{VERSION}";</script>\n</head>',
+    ).replace(
+        '.css"', f'.css?v={VERSION}"'
+    ).replace(
+        '.js"', f'.js?v={VERSION}"'
+    )
+    return HTMLResponse(
+        content=text,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/login", include_in_schema=False)
-async def login_page() -> FileResponse:
-    return FileResponse(str(STATIC_DIR / "login.html"))
+async def login_page() -> HTMLResponse:
+    return _html_response("login.html")
 
 
 @app.post("/api/auth/login")
@@ -388,8 +411,8 @@ async def api_me(request: Request) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.get("/", include_in_schema=False)
-async def index() -> FileResponse:
-    return FileResponse(str(STATIC_DIR / "index.html"))
+async def index() -> HTMLResponse:
+    return _html_response("index.html")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
