@@ -258,12 +258,16 @@ function initChannelSearch() {
 }
 
 function _channelFolderPath(ch) {
-  if (ch.local_path) return ch.local_path;
+  // SMB-источники: всегда возвращаем UNC-путь (\\host\share\path),
+  // даже если шара смонтирована локально — путь к точке монтирования
+  // специфичен для сервера и бесполезен пользователю.
   if (ch.smb) {
     const parts = [ch.smb.host, ch.smb.share];
     if (ch.smb.path) parts.push(ch.smb.path);
     return '\\\\' + parts.join('\\');
   }
+  // Только для каналов с явным local_path (без SMB) возвращаем локальный путь.
+  if (ch.local_path) return ch.local_path;
   return '';
 }
 
