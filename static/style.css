@@ -661,6 +661,15 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 .playlist-row:hover .pl-add-btn { opacity: 1; }
 .playlist-row.pl-current .pl-title { font-weight: 700; }
 
+/* ── Log-list empty hint ──────────────────────────────────── */
+.loglist-empty-hint {
+  padding: 14px 16px;
+  color: var(--fg2);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
 /* ── Log-list rows ────────────────────────────────────────── */
 .log-row {
   display: flex;

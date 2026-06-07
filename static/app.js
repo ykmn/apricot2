@@ -632,6 +632,13 @@ function addLogItem(item) {
 function renderLogList() {
   const container = document.getElementById('loglist-items');
   container.innerHTML = '';
+  if (logItems.length === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'loglist-empty-hint';
+    hint.textContent = I18n.t('panel.segments_empty_hint');
+    container.appendChild(hint);
+    return;
+  }
   logItems.forEach(item => {
     const row = document.createElement('div');
     row.className = 'log-row';

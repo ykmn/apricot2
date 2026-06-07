@@ -27,17 +27,17 @@
   },
   "transport": {
     "play_title": "Play / Pause",
-    "mark_in_title": "Set segment start",
-    "mark_out_title": "Set segment end",
-    "add_segment": "Add segment",
+    "mark_in_title": "Set fragment start",
+    "mark_out_title": "Set fragment end",
+    "add_segment": "Add fragment",
     "clear_selection": "Clear selection",
     "go_now_title": "Go to current time",
     "no_selection_alert": "Set a selection with In and Out first",
     "no_channel_alert": "Select a recording channel first",
-    "segment_too_large_alert": "Segment too large — export may be incorrect. Select a fragment no longer than 3 hours."
+    "segment_too_large_alert": "Fragment too large — export may be incorrect. Select a fragment no longer than 3 hours."
   },
   "sel": {
-    "warning": "⚠ Segment too large, export may be incorrect"
+    "warning": "⚠ Fragment too large, export may be incorrect"
   },
   "status": {
     "init": "Initialising…",
@@ -84,7 +84,8 @@
   },
   "panel": {
     "playlog": "PLAYLOG",
-    "segments": "SELECTED SEGMENTS"
+    "segments": "SELECTED FRAGMENTS",
+    "segments_empty_hint": "Select a recording channel from the list.\n\nButtons to the right of the channel list:\n⧉ — copy the path to the server with the physical audio files\n# — copy a link to the selected channel and time\n\nClock: select the time you need by left/right-clicking on the date and hour fields, or scroll the timeline with the mouse wheel.\n\nSet the fragment start with the In button.\nSet the fragment end with the Out button.\nAdd the fragment to the selected list.\n\nClick «Export», choose the format, and download the audio file.\n\nMultiple selected fragments can be downloaded at once with the «Download all» button."
   },
   "btn": {
     "download_all": "Download all",
@@ -94,7 +95,7 @@
     "hide_title": "Hide"
   },
   "playlist": {
-    "select_title": "Select segment on timeline"
+    "select_title": "Select fragment on timeline"
   },
   "log": {
     "dl_title": "Export",
@@ -105,7 +106,7 @@
     "adjust_title": "Left click — increment, Right click — decrement"
   },
   "export": {
-    "title": "Export segment",
+    "title": "Export fragment",
     "format_label": "Format:",
     "samplerate_label": "Sample rate:",
     "bitrate_label": "Bitrate:",

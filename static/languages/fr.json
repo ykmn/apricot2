@@ -27,17 +27,17 @@
   },
   "transport": {
     "play_title": "Lecture/Pause",
-    "mark_in_title": "Définir le début du segment",
-    "mark_out_title": "Définir la fin du segment",
-    "add_segment": "Ajouter un segment",
+    "mark_in_title": "Définir le début du fragment",
+    "mark_out_title": "Définir la fin du fragment",
+    "add_segment": "Ajouter un fragment",
     "clear_selection": "Effacer la sélection",
     "go_now_title": "Aller à l'instant actuel",
     "no_selection_alert": "Définissez d'abord une sélection (In et Out)",
     "no_channel_alert": "Sélectionnez d'abord une chaîne",
-    "segment_too_large_alert": "Segment trop grand; l'export risque d'être incorrect. Sélectionnez un fragment d'au maximum 3 heures."
+    "segment_too_large_alert": "Fragment trop grand ; l'export risque d'être incorrect. Sélectionnez un fragment d'au maximum 3 heures."
   },
   "sel": {
-    "warning": "⚠ Segment trop grand; sélectionnez un fragment d'au maximum 3 heures."
+    "warning": "⚠ Fragment trop grand ; sélectionnez un fragment d'au maximum 3 heures."
   },
   "status": {
     "init": "Initialisation…",
@@ -84,7 +84,8 @@
   },
   "panel": {
     "playlog": "JOURNAL",
-    "segments": "SEGMENTS SÉLECTIONNÉS"
+    "segments": "FRAGMENTS SÉLECTIONNÉS",
+    "segments_empty_hint": "Sélectionnez une chaîne d'enregistrement dans la liste.\n\nBoutons à droite de la liste des chaînes :\n⧉ — copier le chemin vers le serveur contenant les fichiers audio\n# — copier un lien vers la chaîne et l'instant sélectionnés\n\nHorloge : choisissez l'heure souhaitée en cliquant (gauche/droit) sur la date et l'heure, ou faites défiler la timeline avec la molette.\n\nDéfinissez le début du fragment avec le bouton In.\nDéfinissez la fin du fragment avec le bouton Out.\nAjoutez le fragment à la liste des sélectionnés.\n\nCliquez sur « Exporter », choisissez le format et téléchargez le fichier audio.\n\nPlusieurs fragments peuvent être téléchargés en une fois avec le bouton « Tout télécharger »."
   },
   "btn": {
     "download_all": "Tout télécharger",
@@ -94,7 +95,7 @@
     "hide_title": "Masquer"
   },
   "playlist": {
-    "select_title": "Sélectionner le segment sur la timeline"
+    "select_title": "Sélectionner le fragment sur la timeline"
   },
   "log": {
     "dl_title": "Exporter",
@@ -105,7 +106,7 @@
     "adjust_title": "Clic gauche — augmenter, clic droit — diminuer"
   },
   "export": {
-    "title": "Exporter le segment",
+    "title": "Exporter le fragment",
     "format_label": "Format :",
     "samplerate_label": "Fréquence d'échantillonnage :",
     "bitrate_label": "Débit :",
