@@ -522,12 +522,16 @@ async def reload_config() -> dict:
 
 @app.post("/api/restart")
 async def restart_server() -> dict:
-    """Restart the server process (replaces current process with a fresh one)."""
+    """Restart the server process.
+
+    When running under systemd (Restart=on-failure or Restart=always) just
+    exit — systemd will relaunch the process with the correct environment
+    (authbind, venv, working directory).  Spawning a child process would
+    bypass authbind and escape systemd supervision.
+    """
     log.info("Server restart requested")
     async def _do_restart() -> None:
         await asyncio.sleep(0.3)
-        # Start a new process then exit the current one
-        subprocess.Popen([sys.executable] + sys.argv)
         os._exit(0)
     asyncio.create_task(_do_restart())
     return {"ok": True}
@@ -701,7 +705,14 @@ async def audio_stream(
             async for chunk in inner:
                 yield chunk
         finally:
-            await inner.aclose()
+            # aclose() must not be called while the generator frame is still
+            # on the stack (e.g. when the client disconnects mid-chunk and
+            # uvicorn cancels the task).  Shield the call so it runs after
+            # the current frame unwinds; suppress errors if already closed.
+            try:
+                await asyncio.shield(inner.aclose())
+            except Exception:
+                pass
 
     return StreamingResponse(gen(), media_type=media_type)
 
