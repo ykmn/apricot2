@@ -285,6 +285,28 @@ class _LdapTaggedError(LdapAuthError):
         self.tag = tag
 
 
+def _get_transitive_groups(conn, base_dn: str, user_dn: str) -> list[str]:
+    """Return DNs of all groups the user belongs to, including nested groups.
+
+    Uses the LDAP_MATCHING_RULE_IN_CHAIN OID (1.2.840.113556.1.4.1941),
+    which is an Active Directory extension that resolves group membership
+    transitively — i.e. it follows nested group chains at the server side.
+    Falls back to an empty list if the search fails (e.g. non-AD server).
+    """
+    import ldap3  # noqa: PLC0415
+    try:
+        safe_dn = ldap3.utils.conv.escape_filter_chars(user_dn)
+        conn.search(
+            base_dn,
+            f"(member:1.2.840.113556.1.4.1941:={safe_dn})",
+            search_scope=ldap3.SUBTREE,
+            attributes=["distinguishedName"],
+        )
+        return [str(e.distinguishedName) for e in conn.entries]
+    except Exception:
+        return []
+
+
 def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict:
     """Try to authenticate short_name against a single domain config.
 
@@ -363,9 +385,8 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
                 f"(base_dn: {base_dn}).",
             )
 
-        user_dn    = str(svc_conn.entries[0].distinguishedName)
-        raw_groups = svc_conn.entries[0].memberOf
-        member_of  = list(raw_groups) if raw_groups else []
+        user_dn   = str(svc_conn.entries[0].distinguishedName)
+        member_of = _get_transitive_groups(svc_conn, base_dn, user_dn)
         svc_conn.unbind()
 
         # Проверка пароля ре-биндом от имени пользователя
@@ -426,12 +447,12 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
         conn.search(
             base_dn,
             f"(sAMAccountName={safe_name})",
-            attributes=["memberOf"],
+            attributes=["distinguishedName"],
         )
         member_of: list[str] = []
         if conn.entries:
-            raw = conn.entries[0].memberOf
-            member_of = list(raw) if raw else []
+            user_dn   = str(conn.entries[0].distinguishedName)
+            member_of = _get_transitive_groups(conn, base_dn, user_dn)
         conn.unbind()
 
     # ── Проверка групп доступа ────────────────────────────────────────────
