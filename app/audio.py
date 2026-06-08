@@ -86,12 +86,14 @@ async def stream_audio(
 
         # Use inpoint/outpoint directives in the concat script — the concat
         # demuxer honours them for fast seeking without decoding from the start.
-        # This is correct unlike -ss before -i (which concat demuxer ignores).
+        # Paths are normalised to forward slashes so ffmpeg parses them correctly
+        # on both Windows (UNC paths) and Linux.
         last_file_duration = (end - last_file.start_dt).total_seconds()
-        with concat_list.open("w") as f:
+        with concat_list.open("w", encoding="utf-8") as f:
             f.write("ffconcat version 1.0\n")
             for idx_f, p in enumerate(input_paths):
-                f.write(f"file '{p}'\n")
+                safe_p = p.replace("\\", "/")
+                f.write(f"file '{safe_p}'\n")
                 if idx_f == 0 and ss > 0:
                     f.write(f"inpoint {ss}\n")
                 if idx_f == len(input_paths) - 1:
@@ -125,7 +127,7 @@ async def stream_audio(
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         assert proc.stdout is not None
 
@@ -136,7 +138,10 @@ async def stream_audio(
                     break
                 yield chunk
         finally:
-            proc.kill()
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
             await proc.wait()
 
 
@@ -150,17 +155,83 @@ async def export_audio(
     out_path: str | None = None,
     copy_mode: bool = False,
 ) -> str:
-    """Export audio segment to a file. Returns the output file path."""
+    """Export audio segment directly to a file via ffmpeg.
+
+    Unlike stream_audio (which pipes to stdout), this writes to a real file so
+    ffmpeg can seek back and write a correct WAV/RIFF header with accurate size.
+    """
     if out_path is None:
         ts = start.strftime("%Y%m%d_%H%M%S")
         fname = f"{channel.id}_{ts}.{out_format}"
         out_path = str(Path(tempfile.gettempdir()) / fname)
 
-    with open(out_path, "wb") as fout:
-        async for chunk in stream_audio(
-            channel, start, end, out_format, bitrate, sample_rate, copy_mode
-        ):
-            fout.write(chunk)
+    idx = file_index.get_index(channel.id)
+    if idx is None:
+        raise RuntimeError(f"No file index for channel {channel.id!r}")
+
+    files = idx.files_for_range(start, end)
+    if not files:
+        raise RuntimeError(f"No audio files found for {channel.id!r} in requested range")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_paths = await _stage_files(files, tmpdir, channel)
+        if not input_paths:
+            raise RuntimeError(f"Failed to stage audio files for {channel.id!r}")
+
+        concat_list = Path(tmpdir) / "concat.txt"
+        first_file = files[0]
+        last_file  = files[-1]
+        ss = max(0.0, (start - first_file.start_dt).total_seconds())
+        last_file_duration = (end - last_file.start_dt).total_seconds()
+
+        native_ext = channel.file_extension.lower()
+        if not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
+            copy_mode = True
+
+        with concat_list.open("w", encoding="utf-8") as f:
+            f.write("ffconcat version 1.0\n")
+            for idx_f, p in enumerate(input_paths):
+                safe_p = p.replace("\\", "/")
+                f.write(f"file '{safe_p}'\n")
+                if idx_f == 0 and ss > 0:
+                    f.write(f"inpoint {ss}\n")
+                if idx_f == len(input_paths) - 1:
+                    f.write(f"outpoint {last_file_duration}\n")
+
+        cmd = [
+            FFMPEG, "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", str(concat_list),
+            "-vn",
+        ]
+
+        if copy_mode:
+            fmt = _native_format(channel)
+            cmd += ["-c", "copy", "-f", fmt]
+        else:
+            if sample_rate:
+                cmd += ["-ar", str(sample_rate)]
+            if out_format == "wav":
+                cmd += ["-acodec", "pcm_s16le", "-f", "wav"]
+            elif out_format == "aac":
+                cmd += ["-acodec", "aac", "-b:a", bitrate, "-f", "adts"]
+            else:
+                cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
+
+        # Write directly to file — ffmpeg can seek back to fix WAV/RIFF header size
+        cmd += [out_path]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await proc.communicate()
+        if proc.returncode != 0:
+            stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+            # Keep only last 10 lines — ffmpeg outputs a lot of progress info
+            last_lines = "\n".join(stderr_text.splitlines()[-10:])
+            raise RuntimeError(f"ffmpeg exited with code {proc.returncode}:\n{last_lines}")
 
     return out_path
 
