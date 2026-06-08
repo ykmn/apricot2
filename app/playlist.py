@@ -245,6 +245,7 @@ def _parse(
     f_cls      = f.get("cls",       "ElemClass")
     f_db_id    = f.get("db_id",     "ElemDbId")
     f_id_num   = f.get("id_number", "ElemIdNumber")
+    f_duration = f.get("duration",  "ElemLength")
     skip_pfx   = source.header_skip_prefix
 
     col: dict[str, int] = {}  # field_name → column index in data rows
@@ -299,16 +300,42 @@ def _parse(
                 if db_id or id_num else ""
             )
 
+            duration = _parse_duration(_get(f_duration))
+
             entries.append(PlaylistEntry(
                 timestamp=ts,
                 title=title,
                 cls=cls,
+                duration=duration,
                 elem_id=elem_id,
             ))
         except Exception:
             continue
 
     return entries
+
+
+# ── Duration parsing ─────────────────────────────────────────────────────────
+
+def _parse_duration(s: str) -> Optional[float]:
+    """Parse ElemLength format 'MM:SS.mmm' or 'HH:MM:SS.mmm' → seconds, or None."""
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        parts = s.split(":")
+        if len(parts) == 2:
+            minutes = int(parts[0])
+            seconds = float(parts[1])
+            return minutes * 60 + seconds
+        if len(parts) == 3:
+            hours   = int(parts[0])
+            minutes = int(parts[1])
+            seconds = float(parts[2])
+            return hours * 3600 + minutes * 60 + seconds
+    except (ValueError, IndexError):
+        pass
+    return None
 
 
 # ── Datetime parsing ──────────────────────────────────────────────────────────
@@ -351,6 +378,7 @@ def _cache_load(playlist_id: str, d: date) -> Optional[list[PlaylistEntry]]:
                 timestamp=datetime.fromtimestamp(e["ts"]),
                 title=e["title"],
                 cls=e["cls"],
+                duration=e.get("duration"),
                 elem_id=e.get("elem_id", ""),
             )
             for e in data.get("entries", [])
@@ -368,7 +396,7 @@ def _cache_save(playlist_id: str, d: date, entries: list[PlaylistEntry]) -> None
             "saved_at": datetime.now().isoformat(timespec="seconds"),
             "entries": [
                 {"ts": e.timestamp.timestamp(), "title": e.title,
-                 "cls": e.cls, "elem_id": e.elem_id}
+                 "cls": e.cls, "duration": e.duration, "elem_id": e.elem_id}
                 for e in entries
             ],
         }

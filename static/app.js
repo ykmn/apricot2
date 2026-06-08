@@ -335,7 +335,8 @@ async function loadPlaylist() {
 function renderPlaylist(entries) {
   const list = document.getElementById('playlist-list');
   list.innerHTML = '';
-  entries.forEach(e => {
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
     const d = new Date(e.timestamp * 1000);
     const timeStr = _fmt2(d.getHours()) + ':' + _fmt2(d.getMinutes()) + ':' + _fmt2(d.getSeconds());
 
@@ -364,7 +365,8 @@ function renderPlaylist(entries) {
     addBtn.title = I18n.t('playlist.select_title');
     addBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      const dur      = e.duration || 180;
+      const next     = entries[i + 1];
+      const dur      = e.duration ?? (next ? next.timestamp - e.timestamp : 180);
       const itemEnd  = e.timestamp + dur;
 
       if (ev.shiftKey) {
@@ -404,7 +406,7 @@ function renderPlaylist(entries) {
     });
 
     list.appendChild(row);
-  });
+  }
   _updateCurrentEntry();
 }
 
