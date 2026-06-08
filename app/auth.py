@@ -18,7 +18,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import logging
 import yaml
+
+log = logging.getLogger("apricot2.auth")
 
 # ── MD4 patch for OpenSSL 3.x ────────────────────────────────────────────────
 # OpenSSL 3.0 removed MD4, which ldap3 needs for NTLM hashing.
@@ -302,8 +305,11 @@ def _get_transitive_groups(conn, base_dn: str, user_dn: str) -> list[str]:
             search_scope=ldap3.SUBTREE,
             attributes=["distinguishedName"],
         )
-        return [str(e.distinguishedName) for e in conn.entries]
-    except Exception:
+        groups = [str(e.distinguishedName) for e in conn.entries]
+        log.debug("Transitive groups for %s (%d): %s", user_dn, len(groups), groups)
+        return groups
+    except Exception as exc:
+        log.warning("Transitive group search failed for %s: %s", user_dn, exc)
         return []
 
 
@@ -459,11 +465,16 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
     is_admin   = any(g in member_of for g in admin_groups)
     has_access = is_admin or any(g in member_of for g in access_groups)
 
+    log.debug(
+        "Access check for %s: is_admin=%s has_access=%s | "
+        "admin_groups=%s access_groups=%s",
+        short_name, is_admin, has_access, admin_groups, access_groups,
+    )
+
     if (admin_groups or access_groups) and not has_access:
-        allowed = ", ".join((admin_groups + access_groups)[:3])
         raise _LdapTaggedError(
             _TAG_NO_ACCESS,
-            f"Пользователь «{short_name}» успешно аутентифицирован,"
+            f"Пользователь «{short_name}» успешно аутентифицирован, "
             f"но не входит ни в одну из групп с правами доступа.\n"
             f"Обратитесь к администратору для получения доступа.",
         )
