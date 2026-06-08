@@ -288,6 +288,32 @@ class _LdapTaggedError(LdapAuthError):
         self.tag = tag
 
 
+def _get_primary_group_dn(conn, base_dn: str, primary_group_id) -> Optional[str]:
+    """Return the DN of the user's primary group by primaryGroupToken.
+
+    AD stores the user's primary group as a RID in primaryGroupID.
+    The matching group can be found via the computed attribute primaryGroupToken.
+    This covers Domain Users (RID 513) and any other primary group.
+    """
+    import ldap3  # noqa: PLC0415
+    if not primary_group_id:
+        return None
+    try:
+        conn.search(
+            base_dn,
+            f"(primaryGroupToken={int(primary_group_id)})",
+            search_scope=ldap3.SUBTREE,
+            attributes=["distinguishedName"],
+        )
+        if conn.entries:
+            dn = str(conn.entries[0].distinguishedName)
+            log.debug("Primary group for primaryGroupID=%s: %s", primary_group_id, dn)
+            return dn
+    except Exception as exc:
+        log.warning("Primary group lookup failed (primaryGroupID=%s): %s", primary_group_id, exc)
+    return None
+
+
 def _get_transitive_groups(conn, base_dn: str, user_dn: str) -> list[str]:
     """Return DNs of all groups the user belongs to, including nested groups.
 
@@ -381,7 +407,7 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
         svc_conn.search(
             base_dn,
             f"(sAMAccountName={safe_name})",
-            attributes=["distinguishedName", "memberOf"],
+            attributes=["distinguishedName", "primaryGroupID"],
         )
         if not svc_conn.entries:
             svc_conn.unbind()
@@ -391,8 +417,12 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
                 f"(base_dn: {base_dn}).",
             )
 
-        user_dn   = str(svc_conn.entries[0].distinguishedName)
-        member_of = _get_transitive_groups(svc_conn, base_dn, user_dn)
+        user_dn          = str(svc_conn.entries[0].distinguishedName)
+        primary_group_id = svc_conn.entries[0]["primaryGroupID"].value
+        member_of        = _get_transitive_groups(svc_conn, base_dn, user_dn)
+        primary_dn       = _get_primary_group_dn(svc_conn, base_dn, primary_group_id)
+        if primary_dn:
+            member_of.append(primary_dn)
         svc_conn.unbind()
 
         # Проверка пароля ре-биндом от имени пользователя
@@ -453,12 +483,16 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
         conn.search(
             base_dn,
             f"(sAMAccountName={safe_name})",
-            attributes=["distinguishedName"],
+            attributes=["distinguishedName", "primaryGroupID"],
         )
         member_of: list[str] = []
         if conn.entries:
-            user_dn   = str(conn.entries[0].distinguishedName)
-            member_of = _get_transitive_groups(conn, base_dn, user_dn)
+            user_dn          = str(conn.entries[0].distinguishedName)
+            primary_group_id = conn.entries[0]["primaryGroupID"].value
+            member_of        = _get_transitive_groups(conn, base_dn, user_dn)
+            primary_dn       = _get_primary_group_dn(conn, base_dn, primary_group_id)
+            if primary_dn:
+                member_of.append(primary_dn)
         conn.unbind()
 
     # ── Проверка групп доступа ────────────────────────────────────────────
