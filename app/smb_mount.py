@@ -107,12 +107,23 @@ def _mount_linux(smb: SMBConfig, mount_point: Path) -> str:
     """
     cifs_bin = shutil.which("mount.cifs") or "/sbin/mount.cifs"
     unc = f"//{smb.host}/{smb.share}"
+
+    # Determine security mode.
+    # auth_protocol="kerberos" → sec=krb5 (requires kinit or keytab).
+    # auth_protocol="ntlm" / None → sec=ntlmssp (NTLMv2, works on modern kernels).
+    # Legacy sec=ntlm (NTLMv1) is disabled in Ubuntu 22.04+ kernels.
+    if smb.auth_protocol == "kerberos":
+        sec = "krb5"
+    else:
+        sec = "ntlmssp"
+
     base_options = [
         f"username={smb.username}",
         f"password={smb.password or ''}",
         f"uid={os.getuid()}",
         f"gid={os.getgid()}",
         "iocharset=utf8",
+        f"sec={sec}",
     ]
     if smb.domain:
         base_options.append(f"domain={smb.domain}")
