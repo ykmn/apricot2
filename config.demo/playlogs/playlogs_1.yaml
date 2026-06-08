@@ -37,6 +37,7 @@ fields:
   cls:       "ElemClass"      # класс: M/J/C/P/N
   db_id:     "ElemDbId"       # ID в базе данных (всплывает при наведении)
   id_number: "ElemIdNumber"   # порядковый номер элемента
+  duration:  "ElemLength"     # продолжительность элемента
 
 # Цвета классов (CSS hex)
 class_colors:
