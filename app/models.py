@@ -28,6 +28,7 @@ class ChannelConfig:
     local_path: Optional[str] = None
     smb: Optional[SMBConfig] = None
     playlogs: list[str] = field(default_factory=list)
+    playlogs_delay: int = 500   # ms; playlog timestamps are shifted forward by this amount
 
 
 @dataclass

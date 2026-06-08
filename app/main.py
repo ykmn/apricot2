@@ -28,7 +28,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.012"
+VERSION = "1.2.013"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -621,7 +621,8 @@ async def get_stations() -> list[dict]:
                     "file_extension": ch.file_extension,
                     "sample_rate":    ch.sample_rate,
                     "bitrate":        ch.bitrate,
-                    "playlogs":       ch.playlogs,
+                    "playlogs":        ch.playlogs,
+                    "playlogs_delay":  ch.playlogs_delay,
                     "local_path":     ch.local_path,
                     "smb": {
                         "host":  ch.smb.host,
@@ -657,6 +658,7 @@ async def get_playlist(
     channel = channels_map.get(channel_id)
     if channel is None:
         raise HTTPException(404)
+    delay_s  = channel.playlogs_delay / 1000.0
     start_dt = datetime.fromtimestamp(start)
     end_dt   = datetime.fromtimestamp(end)
     entries  = []
@@ -668,7 +670,7 @@ async def get_playlist(
             cl_colors = pl_cfg.class_colors
             cl_names  = pl_cfg.class_names
             entries.append({
-                "timestamp": e.timestamp.timestamp(),
+                "timestamp": e.timestamp.timestamp() + delay_s,
                 "title":     e.title,
                 "cls":       e.cls,
                 "duration":  e.duration,

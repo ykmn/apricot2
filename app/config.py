@@ -99,6 +99,7 @@ def _parse_channel(raw: dict) -> ChannelConfig:
         local_path=raw.get("local_path"),
         smb=_parse_smb(raw.get("smb")),
         playlogs=raw.get("playlogs", []),
+        playlogs_delay=int(raw.get("playlogs_delay", 500)),
     )
 
 
