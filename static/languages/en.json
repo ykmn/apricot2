@@ -11,7 +11,8 @@
     "reload_config": "🔄 Reload configuration",
     "restart_server": "🔁 Restart server",
     "logout": "🚪 Log out",
-    "language": "🌐 Language"
+    "language": "🌐 Language",
+    "about": "ℹ️ About…"
   },
   "channel": {
     "select_prompt": "Select a channel ⬇️",
@@ -92,7 +93,8 @@
     "clear": "Clear",
     "export": "Export",
     "cancel": "Cancel",
-    "hide_title": "Hide"
+    "hide_title": "Hide",
+    "ok": "OK"
   },
   "playlist": {
     "select_title": "Select fragment on timeline"
@@ -150,5 +152,9 @@
     "error_empty_username": "Enter a username",
     "error_wrong_credentials": "Incorrect username or password",
     "error_connection": "Connection error"
+  },
+  "about": {
+    "title": "Apricot 2",
+    "body": "<p class=\"about-version\">Version: {version}</p><p>A web application for navigating broadcast monitoring recordings: find the right moment, select fragments, and export to audio format.</p><p><img src=\"/static/github-icon.svg\" width=\"32\" height=\"32\">&nbsp;<img src=\"/static/claude-icon.svg\" width=\"32\" height=\"32\"><br><br>© 2026 Roman Ermakov.<br>Open-source web application distributed under the terms of the <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\" target=\"_blank\">GPL v3</a> license.</p>"
   }
 }

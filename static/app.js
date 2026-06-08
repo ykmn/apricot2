@@ -1465,12 +1465,38 @@ function initHamburgerMenu() {
     setTimeout(_tryReload, 1500);
   });
 
+  // About
+  document.getElementById('menu-about').addEventListener('click', () => {
+    menu.classList.add('hidden');
+    _showAboutModal();
+  });
+
+  // About modal — OK button and backdrop click
+  document.getElementById('about-ok').addEventListener('click', () => {
+    document.getElementById('about-modal').classList.add('hidden');
+  });
+  document.getElementById('about-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('about-modal'))
+      document.getElementById('about-modal').classList.add('hidden');
+  });
+
   // Logout
   document.getElementById('menu-logout').addEventListener('click', async () => {
     menu.classList.add('hidden');
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* ok */ }
     location.href = '/login';
   });
+}
+
+function _showAboutModal() {
+  const version = (window.__APP_VERSION__ || '') +
+    (window.__BUILD_DATE__ ? '  ·  ' + window.__BUILD_DATE__ : '');
+  const html = I18n.t('about.body', { version });
+  const content = document.getElementById('about-content');
+  content.innerHTML = '<h2>' + I18n.t('about.title') + '</h2>' + html;
+  // Re-apply i18n to the OK button in case language changed
+  document.getElementById('about-ok').textContent = I18n.t('btn.ok');
+  document.getElementById('about-modal').classList.remove('hidden');
 }
 
 function _reapplyDynamicTexts() {

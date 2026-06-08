@@ -748,6 +748,39 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 .modal-buttons { display: flex; gap: 8px; justify-content: flex-end; }
 #export-progress { font-style: italic; color: var(--text2); }
 
+/* ── About modal ─────────────────────────────────────────── */
+.about-box {
+  max-width: 480px;
+  width: 100%;
+}
+#about-content {
+  line-height: 1.7;
+  color: var(--text);
+  text-align: left;
+}
+#about-content h2 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 10px;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+#about-content p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+#about-content p:last-child { margin-bottom: 0; }
+#about-content .about-version {
+  color: var(--text2);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+#about-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+#about-content a:hover { text-decoration: underline; }
+
 /* ── App brand ────────────────────────────────────────────── */
 #app-brand {
   display: flex;

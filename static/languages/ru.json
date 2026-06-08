@@ -11,7 +11,8 @@
     "reload_config": "🔄 Обновить конфигурацию без перезапуска",
     "restart_server": "🔁 Перезапустить сервер",
     "logout": "🚪 Выйти",
-    "language": "🌐 Язык"
+    "language": "🌐 Язык",
+    "about": "ℹ️ О веб-приложении…"
   },
   "channel": {
     "select_prompt": "Выберите канал ⬇️",
@@ -92,7 +93,8 @@
     "clear": "Очистить",
     "export": "Экспортировать",
     "cancel": "Отмена",
-    "hide_title": "Скрыть"
+    "hide_title": "Скрыть",
+    "ok": "ОК"
   },
   "playlist": {
     "select_title": "Выделить фрагмент на таймлайне"
@@ -150,5 +152,9 @@
     "error_empty_username": "Введите имя пользователя",
     "error_wrong_credentials": "Неверное имя пользователя или пароль",
     "error_connection": "Ошибка подключения к серверу"
+  },
+  "about": {
+    "title": "Абрикос 2",
+    "body": "<p class=\"about-version\">Версия: {version}</p><p><br>Веб-приложение для навигации по записям контроля радиоэфира: поиск нужного момента, выделение фрагментов и экспорт в аудиоформат.</p><p><img src=\"/static/github-icon.svg\" width=\"32\" height=\"32\">&nbsp;<img src=\"/static/claude-icon.svg\" width=\"32\" height=\"32\"><br><br>© 2026 Роман Ермаков.<br>Веб-приложение с открытым исходным кодом и распространяется по условиям лицензии <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\" target=\"_blank\">GPL v3</a>.</p>"
   }
 }

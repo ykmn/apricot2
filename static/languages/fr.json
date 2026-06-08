@@ -11,7 +11,8 @@
     "reload_config": "🔄 Recharger la configuration",
     "restart_server": "🔁 Redémarrer le serveur",
     "logout": "🚪 Se déconnecter",
-    "language": "🌐 Langue"
+    "language": "🌐 Langue",
+    "about": "ℹ️ À propos…"
   },
   "channel": {
     "select_prompt": "Sélectionnez une chaîne ⬇️",
@@ -92,7 +93,8 @@
     "clear": "Effacer",
     "export": "Exporter",
     "cancel": "Annuler",
-    "hide_title": "Masquer"
+    "hide_title": "Masquer",
+    "ok": "OK"
   },
   "playlist": {
     "select_title": "Sélectionner le fragment sur la timeline"
@@ -150,5 +152,9 @@
     "error_empty_username": "Veuillez entrer un nom d'utilisateur",
     "error_wrong_credentials": "Nom d'utilisateur ou mot de passe invalide.",
     "error_connection": "Erreur de connexion au serveur"
+  },
+  "about": {
+    "title": "Abricot 2",
+    "body": "<p class=\"about-version\">Version : {version}</p><p>Application web de navigation dans les enregistrements de surveillance des émissions radio : trouvez le bon moment, sélectionnez des fragments et exportez en format audio.</p><p><img src=\"/static/github-icon.svg\" width=\"32\" height=\"32\">&nbsp;<img src=\"/static/claude-icon.svg\" width=\"32\" height=\"32\"><br><br>© 2026 Roman Ermakov.<br>Application web open source distribuée selon les termes de la licence <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\" target=\"_blank\">GPL v3</a>.</p>"
   }
 }
