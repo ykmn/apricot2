@@ -96,7 +96,7 @@ def _smb2_probe(host: str, username: str, password: str, domain: str | None) -> 
         kwargs: dict = {"username": username, "password": password or "",
                         "auth_protocol": "ntlm"}
         if domain:
-            kwargs["auth_protocol"] = "ntlm"
+            kwargs["domain"] = domain
         smbclient.register_session(host, **kwargs)
         return "OK — сессия NTLM установлена"
     except Exception as exc:
@@ -228,6 +228,44 @@ def _nmap_smb_protocols(host: str) -> str | None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _load_all_secrets() -> list[dict]:
+    """Return all entries from config/secret.yaml."""
+    try:
+        import yaml
+        from pathlib import Path
+        secret_file = Path(__file__).parent.parent / "config" / "secret.yaml"
+        if not secret_file.exists():
+            return []
+        data = yaml.safe_load(secret_file.read_text(encoding="utf-8")) or {}
+        return data.get("authorization", [])
+    except Exception as exc:
+        print(f"  [secret.yaml] не удалось загрузить: {exc}")
+        return []
+
+
+def _probe_secret_ntlm(host: str, share: str, path: str, secret: dict) -> None:
+    """Probe a specific secret entry against host using forced NTLM (ignoring auth_protocol)."""
+    username = secret.get("username", "")
+    password = secret.get("password", "")
+    domain   = secret.get("domain", "")
+    sid      = secret.get("id", "?")
+    label    = f"secret:{sid} ({domain}\\{username})" if domain else f"secret:{sid} ({username})"
+
+    from app.models import SMBConfig
+    smb = SMBConfig(host=host, share=share, path=path,
+                    username=username, password=password,
+                    domain=domain, auth_protocol="ntlm")
+
+    probe = _smb2_probe(host, username, password, domain)
+    print(f"  {label}")
+    print(f"    smbprotocol : {probe}")
+    if "OK" in probe:
+        ls = _list_shares(host, share, path, username, password)
+        print(f"    listdir     : {ls}")
+    cifs = _cifs_probe(smb)
+    print(f"    mount.cifs  : {cifs}")
+
+
 def main() -> None:
     configs = _collect_smb_configs()
     print(f"Диагностика SMB — {len(configs)} уникальных шар\n{'─'*64}")
@@ -265,6 +303,16 @@ def main() -> None:
 
         cifs = _cifs_probe(smb)
         print(f"  mount.cifs   : {cifs}")
+
+        # If auth failed — try every secret via NTLM to find working credentials
+        auth_failed = ("ОШИБКА" in cifs or "Permission denied" in cifs
+                       or "ОШИБКА" in (probe if smb.auth_protocol != "kerberos" else ""))
+        if auth_failed:
+            all_secrets = _load_all_secrets()
+            if all_secrets:
+                print(f"\n  ── Перебор всех секретов через NTLM для //{host}/{smb.share} ──")
+                for sec in all_secrets:
+                    _probe_secret_ntlm(host, smb.share, smb.path or "", sec)
 
     print(f"\n{'─'*64}\nГотово.")
 
