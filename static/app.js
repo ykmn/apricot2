@@ -364,9 +364,33 @@ function renderPlaylist(entries) {
     addBtn.title = I18n.t('playlist.select_title');
     addBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      const dur = e.duration || 180;
-      Timeline.setSelStart(e.timestamp);
-      Timeline.setSelEnd(e.timestamp + dur);
+      const dur      = e.duration || 180;
+      const itemEnd  = e.timestamp + dur;
+
+      if (ev.shiftKey) {
+        // Shift: extend current selection to include this item
+        const { start: curS, end: curE } = Timeline.getSelection();
+        if (curS === null && curE === null) {
+          // No current selection — behave like normal click
+          Timeline.setSelStart(e.timestamp);
+          Timeline.setSelEnd(itemEnd);
+        } else {
+          const curStart = curS ?? curE;
+          const curEnd   = curE ?? curS;
+          if (e.timestamp >= curStart) {
+            // Item is after (or within) current selection → extend end
+            Timeline.setSelStart(curStart);
+            Timeline.setSelEnd(Math.max(curEnd, itemEnd));
+          } else {
+            // Item is before current selection → extend start
+            Timeline.setSelStart(e.timestamp);
+            Timeline.setSelEnd(curEnd);
+          }
+        }
+      } else {
+        Timeline.setSelStart(e.timestamp);
+        Timeline.setSelEnd(itemEnd);
+      }
     });
 
     row.appendChild(time);

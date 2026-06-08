@@ -97,7 +97,7 @@
     "ok": "OK"
   },
   "playlist": {
-    "select_title": "Select fragment on timeline"
+    "select_title": "Select fragment on timeline\nShift+click — extend current selection"
   },
   "log": {
     "dl_title": "Export",
