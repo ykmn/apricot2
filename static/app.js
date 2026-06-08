@@ -983,6 +983,31 @@ function initHotkeys() {
   });
 }
 
+// ── Braille spinner ────────────────────────────────────────────────────────
+const _SPINNER_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+const _spinnerTargets = new Map(); // element → intervalId
+
+function _spinnerStart(el) {
+  if (_spinnerTargets.has(el)) return;          // already spinning
+  let i = 0;
+  el.textContent = _SPINNER_FRAMES[0];
+  const id = setInterval(() => {
+    i = (i + 1) % _SPINNER_FRAMES.length;
+    el.textContent = _SPINNER_FRAMES[i];
+  }, 80);
+  _spinnerTargets.set(el, id);
+}
+
+function _spinnerStop(el) {
+  const id = _spinnerTargets.get(el);
+  if (id !== undefined) { clearInterval(id); _spinnerTargets.delete(el); }
+}
+
+function _spinnerStopAll() {
+  _spinnerTargets.forEach(id => clearInterval(id));
+  _spinnerTargets.clear();
+}
+
 // ── Index status bar ───────────────────────────────────────────────────────
 let _statusChannels = [];   // [{id, name, files, done, failed, rescanning}]
 // [{pl_id, pl_name, priority, ok, error, checking}]
@@ -1024,7 +1049,7 @@ function _applyIndexStatus(data) {
     const total = data.total_channels;
     const active = _statusChannels.find(c => !c.done);
     const label  = active ? ` · ${_displayName(active.name)}` : '';
-    _setStatus('scanning', '⟳',
+    _setStatus('scanning', '',
       I18n.t('status.index_scanning', { done, total, label }));
   }
 }
@@ -1039,7 +1064,7 @@ function _handleCacheLoaded(msg) {
 function _handleIndexScanning(msg) {
   _statusChannels.forEach(c => { c.rescanning = (c.id === msg.channel_id); });
   _rebuildDots();
-  _setStatus('scanning', '⟳',
+  _setStatus('scanning', '',
     I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label: ` · ${_displayName(msg.channel_name)}` }));
 }
 
@@ -1066,7 +1091,7 @@ function _handleIndexProgress(msg) {
 
   const nextCh = _statusChannels.find(c => !c.done);
   const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
-  _setStatus('scanning', '⟳',
+  _setStatus('scanning', '',
     I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label }),
     I18n.t('status.detail_done', { name: _displayName(msg.channel_name), files: msg.files }));
 }
@@ -1078,7 +1103,7 @@ function _handleIndexError(msg) {
 
   const nextCh = _statusChannels.find(c => !c.done);
   const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
-  _setStatus('scanning', '⟳',
+  _setStatus('scanning', '',
     I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label }),
     I18n.t('status.detail_unavailable', { name: _displayName(msg.channel_name) }));
 }
@@ -1102,7 +1127,7 @@ function _handlePlaylogChecking() {
   bar.classList.remove('hidden');
   _plSources = _plSources.map(s => ({ ...s, checking: true }));
   if (!_plSources.length) {
-    document.getElementById('plbar-icon').textContent   = '⟳';
+    _spinnerStart(document.getElementById('plbar-icon'));
     document.getElementById('plbar-text').textContent   = I18n.t('playlog.checking');
     document.getElementById('plbar-detail').textContent = '';
   }
@@ -1134,18 +1159,20 @@ function _applyPlaylogStatus(playlogs) {
     bar.classList.add('hidden');
     return;
   }
+  const plbarIcon = document.getElementById('plbar-icon');
+  _spinnerStop(plbarIcon);
   if (failed === 0) {
-    document.getElementById('plbar-icon').textContent   = '✓';
+    plbarIcon.textContent = '✓';
     document.getElementById('plbar-text').textContent   = I18n.t('playlog.available', { n: total });
     document.getElementById('plbar-detail').textContent = '';
     // Auto-clear text after 5s (bar stays, dots remain)
     setTimeout(() => {
-      document.getElementById('plbar-icon').textContent   = '';
+      plbarIcon.textContent = '';
       document.getElementById('plbar-text').textContent   = '';
       document.getElementById('plbar-detail').textContent = '';
     }, 5000);
   } else {
-    document.getElementById('plbar-icon').textContent   = '⚠';
+    plbarIcon.textContent = '⚠';
     document.getElementById('plbar-text').textContent   =
       I18n.t('playlog.unavailable', { failed, total });
     document.getElementById('plbar-detail').textContent = '';
@@ -1192,16 +1219,22 @@ let _statusHideTimer = null;
 
 function _setStatus(cls, icon, text, detail = '') {
   clearTimeout(_statusHideTimer);
-  const bar = document.getElementById('status-bar');
+  const bar     = document.getElementById('status-bar');
+  const iconEl  = document.getElementById('status-icon');
   bar.classList.remove('status-scanning', 'status-ready', 'status-error', 'hidden');
   bar.classList.add(`status-${cls}`);
-  document.getElementById('status-icon').textContent   = icon;
+  _spinnerStop(iconEl);
+  if (cls === 'scanning') {
+    _spinnerStart(iconEl);
+  } else {
+    iconEl.textContent = icon;
+  }
   document.getElementById('status-text').textContent   = text;
   document.getElementById('status-detail').textContent = detail;
   // Auto-clear informational 'ready' messages after 5 seconds (bar stays visible)
   if (cls === 'ready') {
     _statusHideTimer = setTimeout(() => {
-      document.getElementById('status-icon').textContent   = '';
+      iconEl.textContent = '';
       document.getElementById('status-text').textContent   = '';
       document.getElementById('status-detail').textContent = '';
     }, 5000);
@@ -1402,7 +1435,7 @@ function initHamburgerMenu() {
       _setStatus('error', '⚠', I18n.t('status.no_channel'));
       return;
     }
-    _setStatus('scanning', '⏳', I18n.t('status.rescanning', { name: _displayName(currentChannel.name) }));
+    _setStatus('scanning', '', I18n.t('status.rescanning', { name: _displayName(currentChannel.name) }));
     try {
       await api(`/api/rescan/${currentChannel.id}`, { method: 'POST' });
       // Result arrives via WebSocket (index_progress / index_error)
@@ -1420,7 +1453,7 @@ function initHamburgerMenu() {
       document.getElementById('playlog-bar').classList.remove('hidden');
       return;
     }
-    document.getElementById('plbar-icon').textContent   = '⟳';
+    _spinnerStart(document.getElementById('plbar-icon'));
     document.getElementById('plbar-text').textContent   = I18n.t('playlog.rescanning');
     document.getElementById('plbar-detail').textContent = '';
     document.getElementById('playlog-bar').classList.remove('hidden');
@@ -1436,7 +1469,7 @@ function initHamburgerMenu() {
   // Reload config
   document.getElementById('menu-reload').addEventListener('click', async () => {
     menu.classList.add('hidden');
-    _setStatus('scanning', '⏳', I18n.t('status.reload_config'));
+    _setStatus('scanning', '', I18n.t('status.reload_config'));
     try {
       const res = await api('/api/reload', { method: 'POST' });
       await loadStations();
@@ -1454,7 +1487,7 @@ function initHamburgerMenu() {
     try {
       await api('/api/restart', { method: 'POST' });
     } catch { /* server going down — expected */ }
-    _setStatus('scanning', '⏳', I18n.t('status.restarting'));
+    _setStatus('scanning', '', I18n.t('status.restarting'));
     // Poll until server is back, then reload
     const _tryReload = () => {
       fetch('/api/version').then(r => {
