@@ -262,34 +262,37 @@ async def _stage_files(
     If they're already local, return their paths as-is.
     If SMB, copy to tmpdir.
     """
-    paths = []
     loop = asyncio.get_event_loop()
-    for i, af in enumerate(files):
+    results: list[str | None] = [None] * len(files)
+
+    async def _download_one(i: int, af: AudioFile) -> None:
         if not af.is_smb or channel.local_path:
-            paths.append(af.path)
-        else:
-            ext = channel.file_extension
-            local_copy = str(Path(tmpdir) / f"seg_{i:04d}.{ext}")
-            rel = _rel_from_af(af, channel)
-            t_dl = time.monotonic()
-            try:
-                data = await loop.run_in_executor(
-                    None, lambda rel=rel: smb.read_bytes(None, channel.smb, rel)
-                )
-                elapsed = time.monotonic() - t_dl
-                size_kb = len(data) / 1024
-                log.info(
-                    "stage [%d/%d] %s: %.0f KB in %.2fs (%.0f KB/s) host=%s",
-                    i + 1, len(files), rel, size_kb, elapsed,
-                    size_kb / elapsed if elapsed > 0 else 0,
-                    channel.smb.host if channel.smb else "local",
-                )
-                with open(local_copy, "wb") as f:
-                    f.write(data)
-                paths.append(local_copy)
-            except Exception as exc:
-                log.error("stage [%d/%d] failed %s: %s", i + 1, len(files), rel, exc)
-    return paths
+            results[i] = af.path
+            return
+        ext = channel.file_extension
+        local_copy = str(Path(tmpdir) / f"seg_{i:04d}.{ext}")
+        rel = _rel_from_af(af, channel)
+        t_dl = time.monotonic()
+        try:
+            data = await loop.run_in_executor(
+                None, lambda rel=rel: smb.read_bytes(None, channel.smb, rel)
+            )
+            elapsed = time.monotonic() - t_dl
+            size_kb = len(data) / 1024
+            log.info(
+                "stage [%d/%d] %s: %.0f KB in %.2fs (%.0f KB/s) host=%s",
+                i + 1, len(files), rel, size_kb, elapsed,
+                size_kb / elapsed if elapsed > 0 else 0,
+                channel.smb.host if channel.smb else "local",
+            )
+            with open(local_copy, "wb") as f:
+                f.write(data)
+            results[i] = local_copy
+        except Exception as exc:
+            log.error("stage [%d/%d] failed %s: %s", i + 1, len(files), rel, exc)
+
+    await asyncio.gather(*(_download_one(i, af) for i, af in enumerate(files)))
+    return [p for p in results if p is not None]
 
 
 def _rel_from_af(af: AudioFile, channel: ChannelConfig) -> str:
