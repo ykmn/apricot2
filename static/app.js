@@ -1421,28 +1421,77 @@ function initHamburgerMenu() {
   document.addEventListener('click', () => menu.classList.add('hidden'));
   menu.addEventListener('click', e => e.stopPropagation());
 
-  // Theme toggle
+  // ── Auto theme ─────────────────────────────────────────────────────────
+  // Light: 09:00–18:00  |  Dark: 18:00–09:00
+  // Manual override persists until the next scheduled transition,
+  // then auto theme resumes automatically.
+
+  function _autoTheme() {
+    const h = new Date().getHours();
+    return (h >= 9 && h < 18) ? 'light' : 'dark';
+  }
+
+  function _nextTransition() {
+    const now  = new Date();
+    const next = new Date(now);
+    next.setSeconds(0);
+    next.setMilliseconds(0);
+    const h = now.getHours();
+    if (h >= 9 && h < 18) {
+      next.setHours(18, 0);               // light → dark at 18:00
+    } else if (h < 9) {
+      next.setHours(9, 0);                // dark  → light at 09:00 today
+    } else {
+      next.setDate(next.getDate() + 1);
+      next.setHours(9, 0);               // dark  → light at 09:00 tomorrow
+    }
+    return next.getTime();
+  }
+
+  function _getEffectiveTheme() {
+    try {
+      const obj = JSON.parse(localStorage.getItem('avocado-theme') || 'null');
+      if (obj && obj.until && Date.now() < obj.until) return obj.value;
+    } catch (e) {}
+    return _autoTheme();
+  }
+
+  function _applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById('menu-theme');
+    if (btn) btn.textContent = theme === 'light' ? I18n.t('menu.theme_dark') : I18n.t('menu.theme_light');
+    Timeline.drawAll();
+  }
+
+  function _scheduleThemeTransition() {
+    const delay = Math.max(_nextTransition() - Date.now(), 1000);
+    setTimeout(() => {
+      // If manual override is still valid, wait for the next boundary
+      try {
+        const obj = JSON.parse(localStorage.getItem('avocado-theme') || 'null');
+        if (obj && obj.until && Date.now() < obj.until) {
+          _scheduleThemeTransition();
+          return;
+        }
+      } catch (e) {}
+      _applyTheme(_autoTheme());
+      _scheduleThemeTransition();
+    }, delay);
+  }
+
+  // Theme toggle (manual)
   const themeBtn = document.getElementById('menu-theme');
   themeBtn.addEventListener('click', () => {
-    const html = document.documentElement;
-    const isDark = html.getAttribute('data-theme') !== 'light';
-    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    themeBtn.textContent = isDark
-      ? I18n.t('menu.theme_dark')
-      : I18n.t('menu.theme_light');
-    localStorage.setItem('avocado-theme', isDark ? 'light' : 'dark');
-    Timeline.drawAll();   // repaint canvases with new colors
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    const newTheme = isDark ? 'light' : 'dark';
+    localStorage.setItem('avocado-theme', JSON.stringify({ value: newTheme, until: _nextTransition() }));
+    _applyTheme(newTheme);
     menu.classList.add('hidden');
   });
 
-  // Restore saved theme
-  const saved = localStorage.getItem('avocado-theme');
-  if (saved) {
-    document.documentElement.setAttribute('data-theme', saved);
-    themeBtn.textContent = saved === 'light'
-      ? I18n.t('menu.theme_dark')
-      : I18n.t('menu.theme_light');
-  }
+  // Apply theme on load and schedule auto-transitions
+  _applyTheme(_getEffectiveTheme());
+  _scheduleThemeTransition();
 
   // Language buttons
   document.querySelectorAll('.menu-lang-btn').forEach(btn => {
