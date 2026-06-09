@@ -8,25 +8,76 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ── Theme tokens ── */
+    :root, [data-theme="light"] {
+      --bg:          #f0f4fa;
+      --card-bg:     #ffffff;
+      --card-border: #d4dcea;
+      --card-shadow: rgba(0,0,0,0.10);
+      --text:        #1a2540;
+      --label:       #6070a0;
+      --hint:        #8090b8;
+      --input-bg:    #f5f7fc;
+      --input-brd:   #c8d4e8;
+      --input-focus: #2BA2E0;
+      --lang-brd:    #c8d4e8;
+      --lang-clr:    #8090b8;
+      --theme-btn:   #8090b8;
+    }
+    [data-theme="dark"] {
+      --bg:          #0e1c38;
+      --card-bg:     #122040;
+      --card-border: #1e3268;
+      --card-shadow: rgba(0,0,0,0.55);
+      --text:        #e4e8f4;
+      --label:       #7080a0;
+      --hint:        #506080;
+      --input-bg:    #1a3260;
+      --input-brd:   #1e3268;
+      --input-focus: #2BA2E0;
+      --lang-brd:    #1e3268;
+      --lang-clr:    #7080a0;
+      --theme-btn:   #7080a0;
+    }
+
     body {
-      background: #0e1c38;
-      color: #e4e8f4;
+      background: var(--bg);
+      color: var(--text);
       font-family: 'Segoe UI', system-ui, sans-serif;
       font-size: 14px;
       height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: background 0.2s;
     }
 
     .login-card {
-      background: #122040;
-      border: 1px solid #1e3268;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
       border-radius: 12px;
       padding: 44px 52px;
       width: 400px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+      box-shadow: 0 12px 40px var(--card-shadow);
+      position: relative;
+      transition: background 0.2s, border-color 0.2s;
     }
+
+    .theme-toggle {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--theme-btn);
+      line-height: 1;
+      padding: 2px 4px;
+      opacity: 0.7;
+      transition: opacity 0.15s;
+    }
+    .theme-toggle:hover { opacity: 1; }
 
     .login-brand {
       display: flex;
@@ -45,7 +96,7 @@
     .form-label {
       display: block;
       font-size: 11px;
-      color: #7080a0;
+      color: var(--label);
       text-transform: uppercase;
       letter-spacing: 0.07em;
       margin-bottom: 6px;
@@ -55,16 +106,16 @@
 
     .form-input {
       width: 100%;
-      background: #1a3260;
-      border: 1px solid #1e3268;
+      background: var(--input-bg);
+      border: 1px solid var(--input-brd);
       border-radius: 5px;
-      color: #e4e8f4;
+      color: var(--text);
       padding: 11px 14px;
       font-size: 14px;
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, background 0.2s;
     }
-    .form-input:focus { border-color: #2BA2E0; }
+    .form-input:focus { border-color: var(--input-focus); }
 
     .btn-login {
       width: 100%;
@@ -80,13 +131,13 @@
       transition: filter 0.15s;
       letter-spacing: 0.03em;
     }
-    .btn-login:hover   { filter: brightness(1.1); }
-    .btn-login:active  { filter: brightness(0.95); }
+    .btn-login:hover    { filter: brightness(1.1); }
+    .btn-login:active   { filter: brightness(0.95); }
     .btn-login:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
 
     .hint {
       font-size: 11px;
-      color: #506080;
+      color: var(--hint);
       margin-top: 5px;
       line-height: 1.4;
     }
@@ -107,9 +158,9 @@
     }
     .lang-btn {
       background: transparent;
-      border: 1px solid #1e3268;
+      border: 1px solid var(--lang-brd);
       border-radius: 4px;
-      color: #7080a0;
+      color: var(--lang-clr);
       font-size: 11px;
       padding: 3px 10px;
       cursor: pointer;
@@ -123,6 +174,7 @@
 </head>
 <body>
 <div class="login-card">
+  <button class="theme-toggle" id="theme-toggle" title="Переключить тему">🌙</button>
 
   <div class="login-brand">
     <img src="/static/apricot.svg" width="54" height="54" alt="">
@@ -159,6 +211,41 @@
 </div>
 <script src="/static/i18n.js"></script>
 <script>
+// ── Theme ────────────────────────────────────────────────────────────────────
+function _getLoginTheme() {
+  try {
+    const obj = JSON.parse(localStorage.getItem('avocado-theme') || 'null');
+    if (obj && obj.until && Date.now() < obj.until) return obj.value;
+  } catch (e) {}
+  return 'light';   // default on login page
+}
+
+function _applyLoginTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+}
+
+function _nextLoginTransition() {
+  const now = new Date(), next = new Date(now);
+  next.setSeconds(0); next.setMilliseconds(0);
+  const h = now.getHours();
+  if (h >= 9 && h < 18) { next.setHours(18, 0); }
+  else if (h < 9)        { next.setHours(9, 0); }
+  else                   { next.setDate(next.getDate() + 1); next.setHours(9, 0); }
+  return next.getTime();
+}
+
+_applyLoginTheme(_getLoginTheme());
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  localStorage.setItem('avocado-theme', JSON.stringify({ value: newTheme, until: _nextLoginTransition() }));
+  _applyLoginTheme(newTheme);
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await I18n.init();
   I18n.applyToDOM();
