@@ -182,7 +182,15 @@ def _cleanup_sessions() -> None:
 
 def _load_local_users() -> list[dict]:
     if not USERS_YAML.exists():
-        return [{"username": "admin", "password": "admin", "is_admin": True}]
+        tmp_pwd = secrets.token_urlsafe(16)
+        import sys
+        print(
+            f"\n[auth] WARNING: config/users.yaml not found. "
+            f"Temporary admin credentials — login: admin  password: {tmp_pwd}\n"
+            f"[auth] Create config/users.yaml to set permanent credentials.\n",
+            file=sys.stderr,
+        )
+        return [{"username": "admin", "password": tmp_pwd, "is_admin": True}]
     with USERS_YAML.open(encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return data.get("users", [])

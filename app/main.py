@@ -28,7 +28,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.029"
+VERSION = "1.2.030"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -548,9 +548,19 @@ async def rescan_channel(channel_id: str) -> dict:
     return {"ok": True, "channel_id": channel_id, "channel_name": ch.name}
 
 
+def _require_admin(request: Request) -> None:
+    """Raise 403 if auth is enabled and the current session is not admin."""
+    if not _auth.auth_required():
+        return
+    session = _auth.get_session(request.cookies.get(_auth.COOKIE_NAME))
+    if not session or not session.get("is_admin"):
+        raise HTTPException(403, "Admin access required")
+
+
 @app.post("/api/reload")
-async def reload_config() -> dict:
+async def reload_config(request: Request) -> dict:
     """Reload stations, playlists and settings from YAML files without restart."""
+    _require_admin(request)
     log.info("Config reload requested")
     _load_config()
     file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
@@ -565,7 +575,7 @@ async def reload_config() -> dict:
 
 
 @app.post("/api/restart")
-async def restart_server() -> dict:
+async def restart_server(request: Request) -> dict:
     """Restart the server process.
 
     When running under systemd (Restart=on-failure or Restart=always) just
@@ -573,6 +583,7 @@ async def restart_server() -> dict:
     (authbind, venv, working directory).  Spawning a child process would
     bypass authbind and escape systemd supervision.
     """
+    _require_admin(request)
     log.info("Server restart requested")
     async def _do_restart() -> None:
         await asyncio.sleep(0.3)
@@ -809,11 +820,13 @@ async def audio_export(body: dict) -> dict:
 
 @app.get("/api/audio/download/{filename}")
 async def audio_download(filename: str) -> FileResponse:
-    path = EXPORT_DIR / filename
+    path = (EXPORT_DIR / filename).resolve()
+    if not path.is_relative_to(EXPORT_DIR.resolve()):
+        raise HTTPException(403, "Access denied")
     if not path.exists():
         raise HTTPException(404)
     log.info("Download: %s", filename)
-    return FileResponse(str(path), filename=filename, media_type="application/octet-stream")
+    return FileResponse(str(path), filename=path.name, media_type="application/octet-stream")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
