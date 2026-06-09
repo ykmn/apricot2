@@ -261,17 +261,15 @@ def _domain_matches(domain_cfg: dict, hint: str) -> bool:
 def _get_domain_configs(cfg: dict) -> list[dict]:
     """Normalise single-domain and multi-domain configs into a uniform list.
 
-    Each entry inherits top-level admin_groups / access_groups if not set locally.
+    Each entry inherits top-level admin_groups if not set locally.
     """
-    top_admin  = cfg.get("admin_groups")  or []
-    top_access = cfg.get("access_groups") or []
+    top_admin = cfg.get("admin_groups") or []
 
     if "domains" in cfg:
         result = []
         for d in cfg["domains"]:
             entry = dict(d)
-            entry.setdefault("admin_groups",  top_admin)
-            entry.setdefault("access_groups", top_access)
+            entry.setdefault("admin_groups", top_admin)
             result.append(entry)
         return result
 
@@ -348,13 +346,12 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
     import ldap3                          # noqa: PLC0415  (lazy import)
     import ldap3.core.exceptions as lexc  # noqa: PLC0415
 
-    server_url    = dcfg.get("server", "")
-    domain        = dcfg.get("domain", dcfg.get("name", ""))
-    base_dn       = dcfg.get("base_dn", "")
-    admin_groups  = dcfg.get("admin_groups")  or []
-    access_groups = dcfg.get("access_groups") or []
-    bind_secret   = _resolve_secret(dcfg.get("bind_secret"))
-    domain_label  = dcfg.get("name", domain or server_url)
+    server_url   = dcfg.get("server", "")
+    domain       = dcfg.get("domain", dcfg.get("name", ""))
+    base_dn      = dcfg.get("base_dn", "")
+    admin_groups = dcfg.get("admin_groups") or []
+    bind_secret  = _resolve_secret(dcfg.get("bind_secret"))
+    domain_label = dcfg.get("name", domain or server_url)
 
     safe_name = ldap3.utils.conv.escape_filter_chars(short_name)
 
@@ -495,23 +492,13 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
                 member_of.append(primary_dn)
         conn.unbind()
 
-    # ── Проверка групп доступа ────────────────────────────────────────────
-    is_admin   = any(g in member_of for g in admin_groups)
-    has_access = is_admin or any(g in member_of for g in access_groups)
+    # ── Определение прав: администратор или обычный пользователь ─────────
+    is_admin = any(g in member_of for g in admin_groups)
 
     log.debug(
-        "Access check for %s: is_admin=%s has_access=%s | "
-        "admin_groups=%s access_groups=%s",
-        short_name, is_admin, has_access, admin_groups, access_groups,
+        "Access check for %s: is_admin=%s | admin_groups=%s",
+        short_name, is_admin, admin_groups,
     )
-
-    if (admin_groups or access_groups) and not has_access:
-        raise _LdapTaggedError(
-            _TAG_NO_ACCESS,
-            f"Пользователь «{short_name}» успешно аутентифицирован, "
-            f"но не входит ни в одну из групп с правами доступа.\n"
-            f"Обратитесь к администратору для получения доступа.",
-        )
 
     return {"username": short_name, "is_admin": is_admin, "auth_type": "ldap", "domain": domain_label}
 

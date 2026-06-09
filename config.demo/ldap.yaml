@@ -11,13 +11,9 @@ Local: true
 LDAP: false
 
 # Группы AD с правами администратора (применяются ко всем доменам, если не переопределены)
+# Любой авторизованный доменный пользователь получает доступ на просмотр автоматически.
 admin_groups:
   - "CN=RadioAdmins,OU=Groups,DC=corp,DC=local"
-
-# Группы AD с правами просмотра
-access_groups:
-  - "CN=RadioUsers,OU=Groups,DC=corp,DC=local"
-  - "CN=PartnerUsers,OU=Groups,DC=partner,DC=local"  # пример группы из доверенного домена
 
 
 # ── Вариант 1: Один домен (простая конфигурация) ──────────────────────────────
@@ -45,9 +41,8 @@ access_groups:
 #     server:      "ldap://dc01.partner.local"
 #     base_dn:     "DC=partner,DC=local"
 #     bind_secret: 11
-#     # Можно переопределить группы для конкретного домена:
+#     # Можно переопределить группы администраторов для конкретного домена:
 #     # admin_groups:  [...]
-#     # access_groups: [...]
 
 
 # ── Вариант 3: Global Catalog (один лес, несколько доменов) ───────────────────
