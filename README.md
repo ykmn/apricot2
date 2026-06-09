@@ -314,7 +314,7 @@ LDAP:  false  # доменная авторизация отключена
 ```yaml
 users:
   - username: admin
-    password: admin
+    password: yourStrongPassword
     is_admin: true    # доступ к функциям управления в меню
 
   - username: user
@@ -322,7 +322,13 @@ users:
     is_admin: false   # только навигация и экспорт
 ```
 
-Если файл `users.yaml` отсутствует, создаётся единственный встроенный администратор `admin` / `admin` .
+> [!WARNING]
+> Если файл `users.yaml` отсутствует, при каждом запуске приложение генерирует **случайный одноразовый пароль** для пользователя `admin` и выводит его в stderr:
+> ```
+> [auth] WARNING: config/users.yaml not found. Temporary admin credentials — login: admin  password: xK9mQz…
+> [auth] Create config/users.yaml to set permanent credentials.
+> ```
+> Создайте `config/users.yaml` с постоянными учётными данными до публичного развёртывания.
 
 #### Доменная авторизация Windows AD (`LDAP: true`)
 

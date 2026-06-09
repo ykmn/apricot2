@@ -24,7 +24,8 @@ channels:
     file_extension: "wav"
     sample_rate: 44100
     playlogs:
-      - retro_fm
+      - retro_fm                            # источник плейлогов из config/playlogs
+    playlogs_offset: 500                    # смещение плейлогов относительно аудио
 
   - id: retro_fm_yamal
     name: "Retro FM — Yamal402 (mp3/64k)"
@@ -40,3 +41,4 @@ channels:
     bitrate: "64k"                          # важно: без этого длительность считается неверно
     playlogs:
       - retro_fm
+    playlogs_offset: 4500

@@ -6,7 +6,7 @@
 
 users:
   - username: admin
-    password: admin
+    password: adminPassword
     is_admin: true
 
   - username: user
