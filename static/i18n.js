@@ -50,7 +50,7 @@ const I18n = (() => {
   async function setLang(lang) {
     _data = await _load(lang);
     _lang = lang;
-    localStorage.setItem('avocado-lang', lang);
+    localStorage.setItem('apricot-lang', lang);
     applyToDOM();
     // Update active state on language buttons if present
     document.querySelectorAll('.menu-lang-btn').forEach(btn => {
@@ -59,7 +59,7 @@ const I18n = (() => {
   }
 
   async function init() {
-    _lang = localStorage.getItem('avocado-lang') || 'ru';
+    _lang = localStorage.getItem('apricot-lang') || 'ru';
     _data = await _load(_lang);
   }
 

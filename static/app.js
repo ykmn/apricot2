@@ -13,7 +13,7 @@ let playAnimFrame   = null;
 let _tlAnimUpdate   = false;   // true only during animation-frame setTime calls
 let _seekPending    = false;   // true while user scrolled and audio hasn't started yet
 
-const _LOG_KEY = 'avocado-logitems';
+const _LOG_KEY = 'apricot-logitems';
 
 const audio = document.getElementById('audio-player');
 
@@ -1450,7 +1450,7 @@ function initHamburgerMenu() {
 
   function _getEffectiveTheme() {
     try {
-      const obj = JSON.parse(localStorage.getItem('avocado-theme') || 'null');
+      const obj = JSON.parse(localStorage.getItem('apricot-theme') || 'null');
       if (obj && obj.until && Date.now() < obj.until) return obj.value;
     } catch (e) {}
     return _autoTheme();
@@ -1468,7 +1468,7 @@ function initHamburgerMenu() {
     setTimeout(() => {
       // If manual override is still valid, wait for the next boundary
       try {
-        const obj = JSON.parse(localStorage.getItem('avocado-theme') || 'null');
+        const obj = JSON.parse(localStorage.getItem('apricot-theme') || 'null');
         if (obj && obj.until && Date.now() < obj.until) {
           _scheduleThemeTransition();
           return;
@@ -1484,7 +1484,7 @@ function initHamburgerMenu() {
   themeBtn.addEventListener('click', () => {
     const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
     const newTheme = isDark ? 'light' : 'dark';
-    localStorage.setItem('avocado-theme', JSON.stringify({ value: newTheme, until: _nextTransition() }));
+    localStorage.setItem('apricot-theme', JSON.stringify({ value: newTheme, until: _nextTransition() }));
     _applyTheme(newTheme);
     menu.classList.add('hidden');
   });

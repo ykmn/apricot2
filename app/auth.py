@@ -66,7 +66,7 @@ LDAP_YAML     = CONFIG_DIR / "ldap.yaml"
 USERS_YAML    = CONFIG_DIR / "users.yaml"
 SESSIONS_FILE = CONFIG_DIR / "sessions.yaml"
 
-COOKIE_NAME = "avocado_session"
+COOKIE_NAME = "apricot_session"
 SESSION_TTL = 7 * 24 * 3600   # default: 1 week
 
 

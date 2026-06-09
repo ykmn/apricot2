@@ -214,7 +214,7 @@
 // ── Theme ────────────────────────────────────────────────────────────────────
 function _getLoginTheme() {
   try {
-    const obj = JSON.parse(localStorage.getItem('avocado-theme') || 'null');
+    const obj = JSON.parse(localStorage.getItem('apricot-theme') || 'null');
     if (obj && obj.until && Date.now() < obj.until) return obj.value;
   } catch (e) {}
   return 'light';   // default on login page
@@ -241,7 +241,7 @@ _applyLoginTheme(_getLoginTheme());
 document.getElementById('theme-toggle').addEventListener('click', () => {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const newTheme = isDark ? 'light' : 'dark';
-  localStorage.setItem('avocado-theme', JSON.stringify({ value: newTheme, until: _nextLoginTransition() }));
+  localStorage.setItem('apricot-theme', JSON.stringify({ value: newTheme, until: _nextLoginTransition() }));
   _applyLoginTheme(newTheme);
 });
 
