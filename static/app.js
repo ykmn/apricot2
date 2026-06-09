@@ -705,6 +705,13 @@ function renderLogList() {
     navBtn.textContent = '↗';
     navBtn.title = I18n.t('log.nav_title');
     navBtn.addEventListener('click', () => {
+      // Switch to the channel the fragment was recorded on (if it differs from current)
+      if (!currentChannel || currentChannel.id !== item.channel_id) {
+        for (const st of stations) {
+          const ch = st.channels.find(c => c.id === item.channel_id);
+          if (ch) { selectChannel(ch, st); break; }
+        }
+      }
       Timeline.setTime(item.start);
       // Also restore selection
       Timeline.setSelStart(item.start);
