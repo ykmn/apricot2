@@ -9,13 +9,17 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
 
 from . import smb_client as smb
+from .app_logger import get_logger
 from .file_index import file_index
 from .models import AudioFile, ChannelConfig
+
+log = get_logger("audio")
 
 FFMPEG = os.environ.get("FFMPEG_PATH", "ffmpeg")
 
@@ -64,12 +68,21 @@ async def stream_audio(
     if not files:
         return
 
+    log.info(
+        "stream_audio start: channel=%s files=%d start=%s end=%s copy_mode=%s",
+        channel.id, len(files), start.strftime("%H:%M:%S"), end.strftime("%H:%M:%S"), copy_mode,
+    )
+    t0 = time.monotonic()
+
     # Build ffmpeg input list
     # For SMB files we need to download to temp first if not locally accessible
     with tempfile.TemporaryDirectory() as tmpdir:
         input_paths = await _stage_files(files, tmpdir, channel)
         if not input_paths:
             return
+        t_staged = time.monotonic()
+        log.info("stream_audio staged: channel=%s files=%d in %.2fs",
+                 channel.id, len(input_paths), t_staged - t0)
 
         concat_list = Path(tmpdir) / "concat.txt"
 
@@ -131,11 +144,16 @@ async def stream_audio(
         )
         assert proc.stdout is not None
 
+        first_chunk = True
         try:
             while True:
                 chunk = await proc.stdout.read(65536)
                 if not chunk:
                     break
+                if first_chunk:
+                    log.info("stream_audio first_chunk: channel=%s in %.2fs total",
+                             channel.id, time.monotonic() - t0)
+                    first_chunk = False
                 yield chunk
         finally:
             try:
@@ -252,15 +270,25 @@ async def _stage_files(
         else:
             ext = channel.file_extension
             local_copy = str(Path(tmpdir) / f"seg_{i:04d}.{ext}")
+            rel = _rel_from_af(af, channel)
+            t_dl = time.monotonic()
             try:
                 data = await loop.run_in_executor(
-                    None, lambda: smb.read_bytes(None, channel.smb, _rel_from_af(af, channel))
+                    None, lambda rel=rel: smb.read_bytes(None, channel.smb, rel)
+                )
+                elapsed = time.monotonic() - t_dl
+                size_kb = len(data) / 1024
+                log.info(
+                    "stage [%d/%d] %s: %.0f KB in %.2fs (%.0f KB/s) host=%s",
+                    i + 1, len(files), rel, size_kb, elapsed,
+                    size_kb / elapsed if elapsed > 0 else 0,
+                    channel.smb.host if channel.smb else "local",
                 )
                 with open(local_copy, "wb") as f:
                     f.write(data)
                 paths.append(local_copy)
             except Exception as exc:
-                print(f"[audio] failed to stage {af.path}: {exc}")
+                log.error("stage [%d/%d] failed %s: %s", i + 1, len(files), rel, exc)
     return paths
 
 
