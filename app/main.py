@@ -28,7 +28,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.022"
+VERSION = "1.2.023"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -353,17 +353,31 @@ async def api_login(request: Request) -> JSONResponse:
     try:
         user = _auth.authenticate(username, password)
     except _auth.AuthError as exc:
-        log.error("Auth failed for '%s': %s", username, exc)
+        log.warning(
+            "Login failed: user=%s ip=%s reason=%s",
+            username,
+            request.client.host if request.client else "—",
+            exc,
+        )
         raise HTTPException(status_code=401, detail=str(exc))
     except RuntimeError as exc:
         log.error("Auth service error for '%s': %s", username, exc)
         raise HTTPException(status_code=503, detail=str(exc))
 
     if not user:
-        log.error("Auth failed for '%s': no user returned", username)
+        log.warning("Login failed: user=%s ip=%s reason=no user returned", username,
+                    request.client.host if request.client else "—")
         raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
 
     token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"], user.get("domain", ""))
+    log.info(
+        "Login: user=%s auth=%s domain=%s admin=%s ip=%s",
+        user["username"],
+        user["auth_type"],
+        user.get("domain", "") or "—",
+        user["is_admin"],
+        request.client.host if request.client else "—",
+    )
     resp  = JSONResponse({
         "username":  user["username"],
         "is_admin":  user["is_admin"],
@@ -383,6 +397,13 @@ async def api_login(request: Request) -> JSONResponse:
 async def api_logout(request: Request) -> JSONResponse:
     token = request.cookies.get(_auth.COOKIE_NAME)
     if token:
+        session = _auth.get_session(token)
+        if session:
+            log.info(
+                "Logout: user=%s ip=%s",
+                session["username"],
+                request.client.host if request.client else "—",
+            )
         _auth.delete_session(token)
     resp = JSONResponse({"ok": True})
     resp.delete_cookie(_auth.COOKIE_NAME)
