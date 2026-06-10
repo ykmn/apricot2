@@ -12,14 +12,13 @@
   - Ubuntu/Debian: `apt install ffmpeg`
   - Windows: `winget install -e --id Gyan.FFmpeg`
 
-## Установка Python и pip
+## Установка Python
 
 ### Linux (Ubuntu / Debian)
 
 ```bash
 sudo apt update
-sudo apt install python3 python3-venv python3-dev
-sudo apt install ffmpeg
+sudo apt install ffmpeg python3 python3-venv python3-dev
 
 # Для монтирования SMB-источников
 sudo apt install cifs-utils
@@ -28,7 +27,8 @@ sudo apt install cifs-utils
 sudo apt install gcc libkrb5-dev
 ```
 
-На Ubuntu 23.04+ и Debian 12+ прямой `pip install` **намеренно заблокирован системой** — используйте виртуальное окружение (см. ниже).
+> [!WARNING]
+> На Ubuntu 23.04+ и Debian 12+ прямой `pip install` **намеренно заблокирован системой** — используйте виртуальное окружение (см. ниже).
 
 ### macOS
 
@@ -39,8 +39,7 @@ sudo apt install gcc libkrb5-dev
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Установка Python
-brew install python
-brew install ffmpeg
+brew install ffmpeg python
 ```
 
 Альтернатива — официальный установщик с [python.org](https://www.python.org/downloads/).
@@ -50,8 +49,7 @@ brew install ffmpeg
 Откройте **PowerShell** и установите всё через winget:
 
 ```powershell
-winget install -e --id Python.Python.3.12
-winget install -e --id Gyan.FFmpeg
+winget install Gyan.FFmpeg Python.Python.3.12
 ```
 
 После установки Python **перезапустите терминал**, чтобы обновился `PATH`, затем проверьте:
@@ -62,7 +60,8 @@ python --version
 
 ## Установка зависимостей
 
-На всех платформах используйте **виртуальное окружение** — это изолирует пакеты проекта от системного Python и избавляет от ошибки `externally-managed-environment` (Ubuntu 23.04+ / Debian 12+).
+> [!TIP]
+> На всех платформах используйте **виртуальное окружение** — это изолирует пакеты проекта от системного Python и избавляет от ошибки `externally-managed-environment` (Ubuntu 23.04+ / Debian 12+).
 
 ```bash
 cd apricot2
@@ -80,7 +79,6 @@ source .venv/bin/activate    # Linux / macOS
 pip install -r requirements.txt
 # Для Kerberos / GSSAPI (только при auth_protocol: kerberos в конфиге SMB)
 pip install -r requirements-kerberos.txt
-
 ```
 
 После активации в начале строки терминала появится префикс `(.venv)`. Команду `python apricot2.py` также нужно выполнять с активированным окружением.
