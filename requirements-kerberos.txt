@@ -3,7 +3,7 @@
 # (кросс-доменный SMB-доступ без явных учётных данных).
 #
 # Перед установкой необходимы системные пакеты:
-#   sudo apt install gcc libkrb5-dev
+#   sudo apt install gcc libkrb5-dev python3-dev
 #
 # Установка:
 #   pip install -r requirements-kerberos.txt
