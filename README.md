@@ -18,14 +18,14 @@
 
 ```bash
 sudo apt update
-sudo apt install python3 python3-venv
+sudo apt install python3 python3-venv python3-dev
 sudo apt install ffmpeg
 
 # Для монтирования SMB-источников
 sudo apt install cifs-utils
 
 # Для Kerberos / GSSAPI (только при auth_protocol: kerberos в конфиге SMB)
-sudo apt install gcc libkrb5-dev python3-dev
+sudo apt install gcc libkrb5-dev
 ```
 
 На Ubuntu 23.04+ и Debian 12+ прямой `pip install` **намеренно заблокирован системой** — используйте виртуальное окружение (см. ниже).
@@ -78,6 +78,9 @@ source .venv/bin/activate    # Linux / macOS
 
 # 3. Установить зависимости
 pip install -r requirements.txt
+# Для Kerberos / GSSAPI (только при auth_protocol: kerberos в конфиге SMB)
+pip install -r requirements-kerberos.txt
+
 ```
 
 После активации в начале строки терминала появится префикс `(.venv)`. Команду `python apricot2.py` также нужно выполнять с активированным окружением.
@@ -530,7 +533,7 @@ cp /etc/letsencrypt/live/your.domain.com/privkey.pem   ssl/server.key
 > sudo chmod 500 /etc/authbind/byport/443
 > sudo chown logger /etc/authbind/byport/443
 >
-> authbind --deep /home/logger/apricot2/venv/bin/python3 apricot2.py
+> authbind --deep /home/logger/apricot2/.venv/bin/python3 apricot2.py
 > ```
 > Замените `logger` на своё имя пользователя и путь к venv при необходимости.
 >
@@ -614,7 +617,7 @@ After=network.target
 Type=simple
 User=logger
 WorkingDirectory=/home/logger/apricot2
-ExecStart=/home/logger/apricot2/venv/bin/python3 apricot2.py
+ExecStart=/home/logger/apricot2/.venv/bin/python3 apricot2.py
 Restart=always
 RestartSec=2
 
@@ -627,7 +630,7 @@ WantedBy=multi-user.target
 ```
 
 > [!NOTE]+
-> `ExecStart` указывает напрямую на Python внутри `venv` — активировать окружение вручную не нужно.
+> `ExecStart` указывает напрямую на Python внутри `.venv` — активировать окружение вручную не нужно.
 
 > [!IMPORTANT]+
 > **`Restart=always`** — обязательно при использовании кнопки «Перезапустить сервер» в меню ☰. Приложение завершается с кодом 0, а `Restart=on-failure` код 0 не считает сбоем и процесс не перезапускает.
@@ -635,7 +638,7 @@ WantedBy=multi-user.target
 > [!IMPORTANT]+
 > **Если приложение слушает порт 443**, замените в секции `[Service]`:
 > ```ini
-> ExecStart=/usr/bin/authbind --deep /home/logger/apricot2/venv/bin/python3 apricot2.py
+> ExecStart=/usr/bin/authbind --deep /home/logger/apricot2/.venv/bin/python3 apricot2.py
 > ```
 > Предварительно настройте authbind (см. раздел [HTTPS](#https)).
 
