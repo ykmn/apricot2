@@ -16,6 +16,10 @@ source .venv/bin/activate      # Linux/macOS
 
 pip install -r requirements.txt
 
+# Kerberos / GSSAPI — только при auth_protocol: kerberos в SMB-конфиге.
+# Требует системные пакеты: sudo apt install gcc libkrb5-dev
+pip install -r requirements-kerberos.txt
+
 # Run
 python apricot2.py
 ```
@@ -26,7 +30,11 @@ There are **no automated tests**. Verification is done manually by running the a
 
 ## Pre-commit hook — version bump
 
-Every commit automatically increments the patch version in `app/main.py` (`VERSION = "X.Y.ZZZ"`) via `scripts/bump_version.py`. The hook also stages the updated `app/main.py`, so both files are included in the same commit. Do not manually edit `VERSION`.
+Do not commit without special user's command.
+Every commit automatically increments the patch version in `app/main.py` (`VERSION = "X.Y.ZZZ"`)
+via `scripts/bump_version.py`. The hook also stages the updated `app/main.py`, so
+both files are included in the same commit. Do not manually edit `VERSION`.
+
 
 ## Architecture
 

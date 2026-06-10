@@ -24,8 +24,7 @@ ldap3>=2.9.1
 pycryptodome>=3.19.0
 
 # ── Kerberos / GSSAPI (опционально, Linux) ────────────────────────────────────
-# Нужен smbprotocol при подключении к SMB-шарам без смонтированного mount.cifs.
-# Перед pip install требуется системный пакет:
-#   sudo apt install libkrb5-dev
-gssapi>=1.8.0
-krb5>=0.5.0
+# Нужен только при auth_protocol: kerberos в конфиге SMB-источника (кросс-доменный доступ).
+# При обычном NTLM-подключении эти пакеты НЕ нужны.
+# Установка: pip install -r requirements-kerberos.txt
+# Системные зависимости перед установкой: sudo apt install gcc libkrb5-dev
