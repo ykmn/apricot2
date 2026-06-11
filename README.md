@@ -11,6 +11,7 @@
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `apt install ffmpeg`
   - Windows: `winget install -e --id Gyan.FFmpeg`
+- прочитать документацию последовательно и полностью.
 
 ## Установка Python
 
@@ -58,7 +59,12 @@ winget install Gyan.FFmpeg Python.Python.3.12
 python --version
 ```
 
-## Установка зависимостей
+## Установка
+
+```bash
+git clone https://github.com/ykmn/apricot2
+cd apricot2
+```
 
 > [!TIP]
 > На всех платформах используйте **виртуальное окружение** — это изолирует пакеты проекта от системного Python и избавляет от ошибки `externally-managed-environment` (Ubuntu 23.04+ / Debian 12+).
@@ -684,6 +690,12 @@ logger ALL=(root) NOPASSWD: /sbin/mount.cifs
 ```
 
 Либо смонтируйте SMB-шары через `/etc/fstab` с опцией `_netdev` — тогда они будут доступны до старта сервиса и авто-монтирование в `apricot2.py` просто подтвердит, что шара уже подключена.
+
+### 6. Обновление в Linux
+
+```bash
+cd ~/apricot2 && git pull && sudo systemctl restart apricot2.service
+```
 
 ---
 
