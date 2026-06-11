@@ -127,16 +127,16 @@ const Timeline = (() => {
   }
 
   function _resizeAll() {
-    const dpr = window.devicePixelRatio || 1;
     rows.forEach(row => {
-      const logW = row.canvas.offsetWidth;
-      const logH = row.canvas.offsetHeight;
-      // Lock CSS height before changing buffer size — prevents canvas from
-      // expanding its rendered height when canvas.height > HTML height attr.
-      row.canvas.style.height = logH + 'px';
-      row.canvas.width  = Math.round(logW * dpr);
-      row.canvas.height = Math.round(logH * dpr);
-      row.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      row.canvas.width = row.canvas.offsetWidth;
+      // On mobile, CSS height (30px) may differ from the HTML height attr (42px).
+      // Sync canvas buffer height to the actual rendered height to avoid
+      // vertical squishing that makes text appear horizontally stretched.
+      const cssH = row.canvas.offsetHeight;
+      if (cssH > 0 && cssH !== row.canvas.height) {
+        row.canvas.style.height = cssH + 'px';
+        row.canvas.height = cssH;
+      }
     });
   }
 
@@ -219,8 +219,8 @@ const Timeline = (() => {
 
   function _drawRow(row) {
     const { canvas, ctx, cellWidth, timePerCell, unit, tall } = row;
-    const W = canvas.offsetWidth;   // logical CSS pixels (ctx scaled by DPR)
-    const H = canvas.offsetHeight;  // logical CSS pixels
+    const W = canvas.width;
+    const H = canvas.height;
     if (W === 0) return;
 
     const TC = _getC();   // theme-aware colors
