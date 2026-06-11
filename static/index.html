@@ -76,6 +76,12 @@
         <button id="btn-now" data-i18n-title="transport.go_now_title" title="Перейти к текущему времени">⟳</button>
       </div>
     </div>
+    <!-- Mobile: date+time inputs, own row (hidden on desktop via CSS) -->
+    <div id="mob-clock-bar">
+      <input id="mob-date" type="date">
+      <input id="mob-time" type="time" step="1">
+      <button id="mob-btn-now" data-i18n-title="transport.go_now_title" title="Перейти к текущему времени">⟳</button>
+    </div>
   </div>
 
   <!-- ── Timeline rows ────────────────────────────────────────────── -->
@@ -123,6 +129,15 @@
   <div id="diag-popover" class="hidden">
     <div id="diag-title" data-i18n="diag.title">Недоступные каналы</div>
     <div id="diag-list"></div>
+  </div>
+
+  <!-- ── Mobile panel tabs (hidden on desktop) ───────────────────── -->
+  <div id="panel-tabs">
+    <button class="panel-tab active" data-panel="playlist-panel" data-i18n="panel.playlog">ПЛЕЙЛОГ</button>
+    <button class="panel-tab" data-panel="loglist-panel">
+      <span data-i18n="panel.segments">ФРАГМЕНТЫ</span>
+      <span id="tab-badge" class="tab-badge hidden">0</span>
+    </button>
   </div>
 
   <!-- ── Main columns ─────────────────────────────────────────────── -->

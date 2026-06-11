@@ -984,3 +984,162 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 [data-theme="light"] .playlist-row:hover { background: rgba(0,0,0,0.05); }
 [data-theme="light"] .playlist-row.active { background: rgba(26,95,176,0.12); }
 [data-theme="light"] .dropdown-channel:hover { background: var(--bg3); }
+
+/* ── Mobile: date/time inputs (always hidden on desktop) ─── */
+#mob-clock-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+#mob-date,
+#mob-time {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  height: 30px;
+  padding: 0 8px;
+  font-family: monospace;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+}
+[data-theme="light"] #mob-date,
+[data-theme="light"] #mob-time {
+  color-scheme: light;
+}
+#mob-date::-webkit-calendar-picker-indicator,
+#mob-time::-webkit-calendar-picker-indicator { display: none; }
+#mob-btn-now {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+#mob-btn-now:hover { filter: brightness(1.2); }
+
+/* ── Mobile panel tabs (always hidden on desktop) ────────── */
+#panel-tabs {
+  display: none;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-bottom: 2px solid var(--border);
+}
+.panel-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 9px 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.panel-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.panel-tab:hover:not(.active) { color: var(--text); }
+.tab-badge {
+  background: var(--danger);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE LAYOUT  (≤ 640 px)
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── Topbar: compact ─────────────────────────────────── */
+  #topbar { height: 52px; padding: 0 0 0 12px; }
+  #app-brand { gap: 8px; }
+  #app-brand-link img { width: 28px; height: 28px; }
+  #app-name { font-size: 22px; }
+  #btn-hamburger { width: 60px; font-size: 22px; }
+
+  /* ── Channel bar: 3 rows ─────────────────────────────── */
+  #channel-bar { padding: 0; gap: 0; }
+
+  /* Row 1: channel label */
+  #channel-label {
+    font-size: 20px;
+    padding: 7px 12px 5px;
+    line-height: 1.2;
+  }
+
+  /* Row 2: filter + buttons */
+  #channel-controls { padding: 0 12px 7px; gap: 6px; }
+  #channel-selector-wrap { flex: 1; width: auto; }
+
+  /* Hide desktop clock spacer + clock */
+  .topbar-spacer { display: none; }
+  #topbar-right  { display: none; }
+
+  /* Row 3: mobile date/time inputs */
+  #mob-clock-bar {
+    display: flex;
+    padding: 0 12px 7px;
+  }
+  #mob-date { flex: 1 1 auto; min-width: 0; }
+  #mob-time { flex: 1 1 auto; min-width: 0; }
+
+  /* ── Timeline: 30 px rows ────────────────────────────── */
+  .tl-row { height: 30px; }
+
+  /* ── Transport: two rows ─────────────────────────────── */
+  #transport {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  #transport-left  { flex-wrap: wrap; gap: 6px; flex: 1 1 100%; }
+  #transport-right { flex: 1 1 100%; gap: 6px; }
+  #btn-mark-in     { margin-left: 0; }
+  #sel-label       { flex: 1; justify-content: flex-end; }
+  #btn-add-log     { flex: 1; }
+
+  /* ── Panel tabs: visible, шрифт меньше чтобы не переносилось ── */
+  #panel-tabs { display: flex; }
+  .panel-tab { font-size: 11px; letter-spacing: 0.02em; padding: 8px 2px; }
+
+  /* ── Main columns: single column, tab-driven ─────────── */
+  #main-columns { flex-direction: column; }
+  .panel { flex: none; border-right: none; }
+  .panel.mob-hidden { display: none; }
+
+  /* ── Playlist: 6 строк видно, остальное скролл ───────── */
+  #playlist-panel .scrollable-list {
+    max-height: calc(6 * 29px);
+    overflow-y: auto;
+  }
+
+  /* ── Log list: 6 строк видно, остальное скролл ───────── */
+  #loglist-panel .scrollable-list {
+    max-height: calc(6 * 45px);
+    overflow-y: auto;
+  }
+
+}

@@ -54,3 +54,5 @@ cache_playlogs/*
 
 # SMB-точки монтирования (Linux / macOS, создаются автоматически при запуске)
 mounts/
+
+std*.txt

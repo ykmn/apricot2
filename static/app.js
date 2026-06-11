@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       _scheduleHighlight();
       if (isPlaying && !_tlAnimUpdate) _debouncedSeek(ts);
       _updateBrandLink();
+      _syncMobClock(ts);
     },
     onSelChange: (s, e) => {
       updateSelLabel(s, e);
@@ -87,6 +88,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initLogList();
   initExportModal();
   initClockControls();
+  initMobClock();
+  initMobileTabs();
   initHamburgerMenu();
   initHotkeys();
   initStatusBar();
@@ -637,8 +640,9 @@ function _saveLogItems() {
 function _loadLogItems() {
   try {
     const raw = localStorage.getItem(_LOG_KEY);
-    if (raw) { logItems = JSON.parse(raw); renderLogList(); }
+    if (raw) logItems = JSON.parse(raw);
   } catch(e) {}
+  renderLogList(); // всегда рендерим: при пустом списке показывает подсказку
 }
 
 // ── Log-list ───────────────────────────────────────────────────────────────
@@ -659,6 +663,7 @@ function addLogItem(item) {
 }
 
 function renderLogList() {
+  _updateTabBadge();
   const container = document.getElementById('loglist-items');
   container.innerHTML = '';
   if (logItems.length === 0) {
@@ -957,6 +962,76 @@ function _adjustTime(unit, dir) {
   Timeline.setTime(d.getTime() / 1000);
   // Refresh availability for the new viewport position
   if (currentChannel) Timeline.setChannel(currentChannel.id);
+}
+
+// ── Mobile clock (date/time inputs) ────────────────────────────────────────
+function _syncMobClock(ts) {
+  const mobDate = document.getElementById('mob-date');
+  const mobTime = document.getElementById('mob-time');
+  if (!mobDate && !mobTime) return;
+  const d = new Date(ts * 1000);
+  const y   = d.getFullYear();
+  const mo  = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h   = String(d.getHours()).padStart(2, '0');
+  const mi  = String(d.getMinutes()).padStart(2, '0');
+  const s   = String(d.getSeconds()).padStart(2, '0');
+  if (mobDate) mobDate.value = `${y}-${mo}-${day}`;
+  if (mobTime) mobTime.value = `${h}:${mi}:${s}`;
+}
+
+function initMobClock() {
+  const mobDate  = document.getElementById('mob-date');
+  const mobTime  = document.getElementById('mob-time');
+  const mobNow   = document.getElementById('mob-btn-now');
+
+  function _applyMobDateTime() {
+    const dv = mobDate?.value; // "YYYY-MM-DD"
+    const tv = mobTime?.value; // "HH:MM" or "HH:MM:SS"
+    if (!dv || !tv) return;
+    const d = new Date(`${dv}T${tv}`);
+    if (isNaN(d)) return;
+    Timeline.setTime(d.getTime() / 1000);
+    if (currentChannel) Timeline.setChannel(currentChannel.id);
+  }
+
+  mobDate?.addEventListener('change', _applyMobDateTime);
+  mobTime?.addEventListener('change', _applyMobDateTime);
+  mobNow?.addEventListener('click', () => Timeline.setTime(Date.now() / 1000));
+}
+
+// ── Mobile panel tabs ───────────────────────────────────────────────────────
+function initMobileTabs() {
+  const tabs = document.getElementById('panel-tabs');
+  if (!tabs) return;
+
+  // Set initial state: show only the active tab's panel
+  const activeTab = tabs.querySelector('.panel-tab.active');
+  if (activeTab) {
+    const target = activeTab.dataset.panel;
+    document.querySelectorAll('#main-columns .panel').forEach(p => {
+      p.classList.toggle('mob-hidden', p.id !== target);
+    });
+  }
+
+  tabs.querySelectorAll('.panel-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.panel;
+      document.querySelectorAll('#main-columns .panel').forEach(p => {
+        p.classList.toggle('mob-hidden', p.id !== target);
+      });
+    });
+  });
+}
+
+function _updateTabBadge() {
+  const badge = document.getElementById('tab-badge');
+  if (!badge) return;
+  const count = logItems.length;
+  badge.textContent = count;
+  badge.classList.toggle('hidden', count === 0);
 }
 
 // ── Hotkeys ────────────────────────────────────────────────────────────────

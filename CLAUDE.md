@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Do not commit without special user's command.
+
+
 ## Project overview
 
 **Абрикос 2 (Apricot 2)** — FastAPI web application for navigating radio broadcast recordings: browsing an audio timeline, selecting fragments, and exporting to MP3/WAV/AAC. Backend is Python, frontend is vanilla JS (no build step).
@@ -30,10 +33,10 @@ There are **no automated tests**. Verification is done manually by running the a
 
 ## Pre-commit hook — version bump
 
-Do not commit without special user's command.
 Every commit automatically increments the patch version in `app/main.py` (`VERSION = "X.Y.ZZZ"`)
 via `scripts/bump_version.py`. The hook also stages the updated `app/main.py`, so
-both files are included in the same commit. Do not manually edit `VERSION`.
+both files are included in the same commit. Do not manually edit `VERSION`. On every commit
+update developing chat history in `docs/` folder.
 
 
 ## Architecture
