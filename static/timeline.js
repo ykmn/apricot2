@@ -131,6 +131,9 @@ const Timeline = (() => {
     rows.forEach(row => {
       const logW = row.canvas.offsetWidth;
       const logH = row.canvas.offsetHeight;
+      // Lock CSS height before changing buffer size — prevents canvas from
+      // expanding its rendered height when canvas.height > HTML height attr.
+      row.canvas.style.height = logH + 'px';
       row.canvas.width  = Math.round(logW * dpr);
       row.canvas.height = Math.round(logH * dpr);
       row.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
