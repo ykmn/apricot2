@@ -127,8 +127,13 @@ const Timeline = (() => {
   }
 
   function _resizeAll() {
+    const dpr = window.devicePixelRatio || 1;
     rows.forEach(row => {
-      row.canvas.width = row.canvas.offsetWidth;
+      const logW = row.canvas.offsetWidth;
+      const logH = row.canvas.offsetHeight;
+      row.canvas.width  = Math.round(logW * dpr);
+      row.canvas.height = Math.round(logH * dpr);
+      row.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     });
   }
 
@@ -211,8 +216,8 @@ const Timeline = (() => {
 
   function _drawRow(row) {
     const { canvas, ctx, cellWidth, timePerCell, unit, tall } = row;
-    const W = canvas.width;
-    const H = canvas.height;
+    const W = canvas.offsetWidth;   // logical CSS pixels (ctx scaled by DPR)
+    const H = canvas.offsetHeight;  // logical CSS pixels
     if (W === 0) return;
 
     const TC = _getC();   // theme-aware colors

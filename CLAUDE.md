@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Do not commit without special user's command.
+Do not commit without special user's command. Keep updating developing history in `docs/` folder.
 
 
 ## Project overview
@@ -35,8 +35,7 @@ There are **no automated tests**. Verification is done manually by running the a
 
 Every commit automatically increments the patch version in `app/main.py` (`VERSION = "X.Y.ZZZ"`)
 via `scripts/bump_version.py`. The hook also stages the updated `app/main.py`, so
-both files are included in the same commit. Do not manually edit `VERSION`. On every commit
-update developing chat history in `docs/` folder.
+both files are included in the same commit. Do not manually edit `VERSION`.
 
 
 ## Architecture
