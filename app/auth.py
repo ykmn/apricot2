@@ -238,17 +238,22 @@ def _check_local_password(entry: dict, password: str) -> bool:
         try:
             from argon2 import PasswordHasher
             from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
-        except ImportError:
-            log.warning("argon2-cffi not installed; cannot verify hashed password for %r", entry.get("username"))
-            return False
-        try:
-            return PasswordHasher().verify(str(argon2_hash), password)
-        except (VerifyMismatchError, VerificationError, InvalidHashError):
-            return False
-        except Exception:
-            log.warning("argon2 verification error for user %r", entry.get("username"))
-            return False
-    # Plaintext fallback (legacy — migrate to password_argon2)
+        except Exception as _imp_err:
+            # argon2-cffi installed but C extension fails to load (e.g. cffi ABI mismatch
+            # on Python 3.14). Fall through to plaintext check so the account is not locked out.
+            log.warning(
+                "argon2-cffi unavailable for user %r (%s: %s); falling back to plaintext password",
+                entry.get("username"), type(_imp_err).__name__, _imp_err,
+            )
+        else:
+            try:
+                return PasswordHasher().verify(str(argon2_hash), password)
+            except (VerifyMismatchError, VerificationError, InvalidHashError):
+                return False
+            except Exception as _exc:
+                log.warning("argon2 verification error for user %r: %s", entry.get("username"), _exc)
+                return False
+    # Plaintext fallback: used when password_argon2 is absent OR argon2-cffi is broken
     return hmac.compare_digest(str(entry.get("password", "")), password)
 
 
