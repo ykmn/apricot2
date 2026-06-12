@@ -12,7 +12,8 @@
     "restart_server": "🔁 Restart server",
     "logout": "🚪 Log out",
     "language": "🌐 Language",
-    "about": "ℹ️ About…"
+    "about": "ℹ️ About…",
+    "check_updates": "🔎 Check for updates…"
   },
   "channel": {
     "select_prompt": "Select a channel ⬇️",
@@ -152,6 +153,23 @@
     "error_empty_username": "Enter a username",
     "error_wrong_credentials": "Incorrect username or password",
     "error_connection": "Connection error"
+  },
+  "update": {
+    "title": "Check for Updates",
+    "checking": "Checking for updates…",
+    "error": "Update check failed: {msg}",
+    "up_to_date": "No new versions found. You are running the latest version.",
+    "local_commit": "Current commit: <code>{sha}</code> on {date}<br>{msg}",
+    "available": "A new version is available!",
+    "col_version": "Version",
+    "col_commit": "Commit",
+    "col_date": "Date",
+    "col_message": "Message",
+    "row_local": "Current",
+    "row_remote": "Latest",
+    "do_update": "Update",
+    "updating": "Updating…",
+    "restarting": "Update complete, restarting…"
   },
   "about": {
     "title": "Apricot 2",

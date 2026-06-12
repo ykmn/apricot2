@@ -1656,6 +1656,21 @@ function initHamburgerMenu() {
     setTimeout(_tryReload, 1500);
   });
 
+  // Check updates
+  document.getElementById('menu-check-updates').addEventListener('click', async () => {
+    menu.classList.add('hidden');
+    _setStatus('scanning', '', I18n.t('update.checking'));
+    let data;
+    try {
+      data = await api('/api/check_updates');
+    } catch (e) {
+      _setStatus('error', '', I18n.t('update.error', { msg: e.message ?? String(e) }));
+      return;
+    }
+    _setStatus('ok', '');
+    _showUpdateModal(data);
+  });
+
   // About
   document.getElementById('menu-about').addEventListener('click', () => {
     menu.classList.add('hidden');
@@ -1671,12 +1686,74 @@ function initHamburgerMenu() {
       document.getElementById('about-modal').classList.add('hidden');
   });
 
+  // Update modal — OK button and backdrop click
+  document.getElementById('update-ok-btn').addEventListener('click', () => {
+    document.getElementById('update-modal').classList.add('hidden');
+  });
+  document.getElementById('update-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('update-modal'))
+      document.getElementById('update-modal').classList.add('hidden');
+  });
+
   // Logout
   document.getElementById('menu-logout').addEventListener('click', async () => {
     menu.classList.add('hidden');
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* ok */ }
     location.href = '/login';
   });
+}
+
+function _showUpdateModal(data) {
+  const modal   = document.getElementById('update-modal');
+  const content = document.getElementById('update-content');
+  const doBtn   = document.getElementById('update-do-btn');
+  const okBtn   = document.getElementById('update-ok-btn');
+
+  let html = '<h2>' + I18n.t('update.title') + '</h2>';
+  if (data.up_to_date) {
+    html += '<p>' + I18n.t('update.up_to_date') + '</p>';
+    html += '<p class="about-version">' + I18n.t('update.local_commit',
+      { sha: data.local.sha, date: data.local.date, msg: data.local.message }) + '</p>';
+    doBtn.classList.add('hidden');
+  } else {
+    html += '<p>' + I18n.t('update.available') + '</p>';
+    html += '<table class="update-table">';
+    html += '<tr><th>' + I18n.t('update.col_version') + '</th><th>' +
+            I18n.t('update.col_commit') + '</th><th>' + I18n.t('update.col_date') + '</th><th>' +
+            I18n.t('update.col_message') + '</th></tr>';
+    html += '<tr><td>' + I18n.t('update.row_local') + '</td><td><code>' +
+            data.local.sha + '</code></td><td>' + data.local.date + '</td><td>' +
+            _escHtml(data.local.message) + '</td></tr>';
+    html += '<tr><td>' + I18n.t('update.row_remote') + '</td><td><code>' +
+            data.remote.sha + '</code></td><td>' + data.remote.date + '</td><td>' +
+            _escHtml(data.remote.message) + '</td></tr>';
+    html += '</table>';
+    doBtn.textContent = I18n.t('update.do_update');
+    doBtn.classList.remove('hidden');
+    doBtn.onclick = async () => {
+      doBtn.disabled = true;
+      doBtn.textContent = I18n.t('update.updating');
+      try {
+        await api('/api/update', { method: 'POST' });
+      } catch { /* server goes down */ }
+      modal.classList.add('hidden');
+      _setStatus('scanning', '', I18n.t('update.restarting'));
+      const _tryReload = () => {
+        fetch('/api/version').then(r => {
+          if (r.ok) window.location.reload();
+          else setTimeout(_tryReload, 1000);
+        }).catch(() => setTimeout(_tryReload, 1000));
+      };
+      setTimeout(_tryReload, 2000);
+    };
+  }
+  content.innerHTML = html;
+  okBtn.textContent = I18n.t('btn.ok');
+  modal.classList.remove('hidden');
+}
+
+function _escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function _showAboutModal() {

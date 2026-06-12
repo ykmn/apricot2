@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import aiofiles
+import urllib.request
 from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -594,6 +595,82 @@ async def restart_server(request: Request) -> dict:
         os._exit(0)
     asyncio.create_task(_do_restart())
     return {"ok": True}
+
+
+@app.get("/api/check_updates")
+async def check_updates(request: Request) -> dict:
+    """Compare local git HEAD with the latest commit on the configured GitHub repo."""
+    _require_admin(request)
+    repo_url: str = settings.get("update", {}).get("repo_url", "").rstrip("/")
+    if not repo_url:
+        raise HTTPException(status_code=501, detail="update.repo_url not configured")
+
+    # Extract owner/repo from https://github.com/owner/repo[/...]
+    import re as _re
+    m = _re.search(r"github\.com/([^/]+/[^/]+)", repo_url)
+    if not m:
+        raise HTTPException(status_code=400, detail="Cannot parse GitHub repo URL")
+    owner_repo = m.group(1)
+
+    # Local HEAD
+    try:
+        local_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        local_date = subprocess.check_output(
+            ["git", "log", "-1", "--format=%ci"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        local_msg = subprocess.check_output(
+            ["git", "log", "-1", "--format=%s"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"git error: {exc}")
+
+    # Remote HEAD via GitHub API
+    api_url = f"https://api.github.com/repos/{owner_repo}/commits/HEAD"
+    try:
+        req = urllib.request.Request(api_url, headers={"Accept": "application/vnd.github+json",
+                                                        "User-Agent": f"Apricot2/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            remote_data = json.loads(resp.read().decode())
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}")
+
+    remote_sha = remote_data.get("sha", "")
+    remote_date = remote_data.get("commit", {}).get("committer", {}).get("date", "")
+    remote_msg = remote_data.get("commit", {}).get("message", "").split("\n")[0]
+
+    return {
+        "up_to_date": local_sha == remote_sha,
+        "local":  {"sha": local_sha[:10],  "date": local_date,  "message": local_msg},
+        "remote": {"sha": remote_sha[:10], "date": remote_date, "message": remote_msg},
+        "repo_url": repo_url,
+    }
+
+
+@app.post("/api/update")
+async def update_server(request: Request) -> dict:
+    """Run git pull, then restart the server."""
+    _require_admin(request)
+    log.info("Server update (git pull) requested")
+    try:
+        result = subprocess.run(
+            ["git", "pull"],
+            capture_output=True, text=True, timeout=60
+        )
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"git pull failed: {output}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="git pull timed out")
+
+    log.info("git pull output: %s", output)
+
+    async def _do_restart() -> None:
+        await asyncio.sleep(0.5)
+        os._exit(0)
+    asyncio.create_task(_do_restart())
+    return {"ok": True, "output": output}
 
 
 # ──────────────────────────────────────────────────────────────────────────────

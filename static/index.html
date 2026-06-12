@@ -39,6 +39,8 @@
         <button class="menu-item" id="menu-reload"  data-admin-only data-i18n="menu.reload_config">🔄 Обновить конфигурацию</button>
         <div class="menu-sep" data-admin-only></div>
         <button class="menu-item" id="menu-restart" data-admin-only data-i18n="menu.restart_server">🔁 Перезапустить сервер</button>
+        <div class="menu-sep" data-admin-only></div>
+        <button class="menu-item" id="menu-check-updates" data-admin-only data-i18n="menu.check_updates">🔎 Проверить обновления…</button>
         <div class="menu-sep"></div>
         <span class="menu-version" id="menu-ver">v…</span>
         <button class="menu-item" id="menu-about" data-i18n="menu.about">ℹ️ О веб-приложении…</button>
@@ -171,6 +173,17 @@
       <div id="about-content"></div>
       <div class="modal-buttons">
         <button id="about-ok" class="btn-green" data-i18n="btn.ok">ОК</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Update modal ─────────────────────────────────────────────── -->
+  <div id="update-modal" class="modal hidden">
+    <div class="modal-box about-box">
+      <div id="update-content"></div>
+      <div class="modal-buttons" id="update-buttons">
+        <button id="update-do-btn" class="btn-green hidden" data-i18n="update.do_update">Обновить</button>
+        <button id="update-ok-btn" class="btn-green" data-i18n="btn.ok">ОК</button>
       </div>
     </div>
   </div>

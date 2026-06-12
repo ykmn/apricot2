@@ -753,6 +753,36 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   max-width: 480px;
   width: 100%;
 }
+#update-content {
+  line-height: 1.7;
+  color: var(--text);
+  text-align: left;
+}
+#update-content h2 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 10px;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+#update-content p { margin: 0 0 8px; font-size: 14px; }
+.update-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 8px 0 12px;
+}
+.update-table th, .update-table td {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.update-table th {
+  background: var(--bg2);
+  font-weight: 600;
+}
+.update-table code { font-family: monospace; font-size: 12px; }
 #about-content {
   line-height: 1.7;
   color: var(--text);

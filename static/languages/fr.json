@@ -12,7 +12,8 @@
     "restart_server": "🔁 Redémarrer le serveur",
     "logout": "🚪 Se déconnecter",
     "language": "🌐 Langue",
-    "about": "ℹ️ À propos…"
+    "about": "ℹ️ À propos…",
+    "check_updates": "🔎 Vérifier les mises à jour…"
   },
   "channel": {
     "select_prompt": "Sélectionnez une chaîne ⬇️",
@@ -152,6 +153,23 @@
     "error_empty_username": "Veuillez entrer un nom d'utilisateur",
     "error_wrong_credentials": "Nom d'utilisateur ou mot de passe invalide.",
     "error_connection": "Erreur de connexion au serveur"
+  },
+  "update": {
+    "title": "Vérification des mises à jour",
+    "checking": "Vérification des mises à jour…",
+    "error": "Erreur lors de la vérification : {msg}",
+    "up_to_date": "Aucune nouvelle version disponible. Vous utilisez la dernière version.",
+    "local_commit": "Commit actuel : <code>{sha}</code> du {date}<br>{msg}",
+    "available": "Une nouvelle version est disponible !",
+    "col_version": "Version",
+    "col_commit": "Commit",
+    "col_date": "Date",
+    "col_message": "Message",
+    "row_local": "Actuelle",
+    "row_remote": "Nouvelle",
+    "do_update": "Mettre à jour",
+    "updating": "Mise à jour…",
+    "restarting": "Mise à jour terminée, redémarrage…"
   },
   "about": {
     "title": "Abricot 2",
