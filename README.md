@@ -617,6 +617,9 @@ source .venv/bin/activate
 .venv\Scripts\activate
 
 python apricot2.py
+
+# Деактивация виртуального окружение
+deactivate
 ```
 
 Откройте браузер: **http://localhost:8765** (или **https://localhost:8765** при включённом SSL)
