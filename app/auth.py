@@ -227,22 +227,58 @@ def _load_local_users() -> list[dict]:
     return data.get("users", [])
 
 
+def _hash_pbkdf2(password: str) -> str:
+    """Return a self-contained PBKDF2-SHA256 hash string for storage in users.yaml.
+
+    Format: $pbkdf2$sha256$<iterations>$<salt_b64>$<hash_b64>
+    600 000 iterations — OWASP 2023 recommendation for PBKDF2-SHA256.
+    Uses only hashlib (stdlib); works on LibreSSL and OpenSSL alike.
+    """
+    import base64
+    salt = os.urandom(32)
+    iterations, dklen = 600_000, 32
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations, dklen=dklen)
+    return f"$pbkdf2$sha256${iterations}${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}"
+
+
+def _verify_pbkdf2(stored: str, password: str, username: object = None) -> bool:
+    """Verify *password* against a stored PBKDF2 hash produced by _hash_pbkdf2."""
+    import base64
+    try:
+        parts = stored.split("$")
+        # ['', 'pbkdf2', 'sha256', '<iterations>', '<salt_b64>', '<hash_b64>']
+        if len(parts) != 6 or parts[1] != "pbkdf2":
+            raise ValueError("unrecognised pbkdf2 format")
+        digest, iterations = parts[2], int(parts[3])
+        salt   = base64.b64decode(parts[4])
+        expect = base64.b64decode(parts[5])
+        dk = hashlib.pbkdf2_hmac(digest, password.encode(), salt, iterations, dklen=len(expect))
+        return hmac.compare_digest(dk, expect)
+    except Exception as exc:
+        log.warning("pbkdf2 verification error for user %r: %s", username, exc)
+        return False
+
+
 def _check_local_password(entry: dict, password: str) -> bool:
     """Verify password against a local user entry.
 
     Checks 'password_argon2' (hashed) first; falls back to plaintext 'password'.
     Using argon2 is strongly recommended — generate hashes with tools/hash_password.py.
     """
+    # 1. PBKDF2-SHA256 hash (stdlib, no external deps) ────────────────────────
+    pbkdf2_hash = entry.get("password_pbkdf2")
+    if pbkdf2_hash:
+        return _verify_pbkdf2(pbkdf2_hash, password, entry.get("username"))
+
+    # 2. Legacy argon2 hash (argon2-cffi) ─────────────────────────────────────
     argon2_hash = entry.get("password_argon2")
     if argon2_hash:
         try:
             from argon2 import PasswordHasher
             from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
         except Exception as _imp_err:
-            # argon2-cffi installed but C extension fails to load (e.g. cffi ABI mismatch
-            # on Python 3.14). Fall through to plaintext check so the account is not locked out.
             log.warning(
-                "argon2-cffi unavailable for user %r (%s: %s); falling back to plaintext password",
+                "argon2-cffi unavailable for user %r (%s: %s); falling back to plaintext",
                 entry.get("username"), type(_imp_err).__name__, _imp_err,
             )
         else:
@@ -253,7 +289,8 @@ def _check_local_password(entry: dict, password: str) -> bool:
             except Exception as _exc:
                 log.warning("argon2 verification error for user %r: %s", entry.get("username"), _exc)
                 return False
-    # Plaintext fallback: used when password_argon2 is absent OR argon2-cffi is broken
+
+    # 3. Plaintext fallback ───────────────────────────────────────────────────
     return hmac.compare_digest(str(entry.get("password", "")), password)
 
 

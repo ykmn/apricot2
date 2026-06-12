@@ -605,6 +605,37 @@ URL репозитория читается бэкендом при каждом
 - `menu.check_updates` — подпись пункта меню
 - `update.*` — все строки модального окна (заголовок, статусы, колонки таблицы, кнопка, сообщения)
 
+## 9. Замена argon2 на PBKDF2-SHA256 (stdlib)
+
+*Сессия 2026-06-12, v1.2.044.*
+
+### Проблема
+
+На Python 3.14 `cffi 2.0.0` не может загрузить C-расширение `argon2-cffi-bindings`: при `from argon2 import PasswordHasher` возникает не `ImportError`, а ошибка инициализации `.so`. Результат — вход с Argon2-хэшем невозможен на продакшн-сервере.
+
+### Решение
+
+Отказ от внешней зависимости `argon2-cffi` в пользу `hashlib.pbkdf2_hmac` (Python stdlib, работает на LibreSSL и OpenSSL, CPython любой версии).
+
+**Формат хэша** — `$pbkdf2$sha256$<iterations>$<salt_base64>$<hash_base64>`  
+**Параметры** — PBKDF2-SHA256, 600 000 итераций (рекомендация OWASP 2023 для PBKDF2-SHA256), соль 32 байта, dklen 32 байта.
+
+### Изменения
+
+| Файл | Что изменилось |
+|---|---|
+| `app/auth.py` | `_hash_pbkdf2()`, `_verify_pbkdf2()`; новое поле `password_pbkdf2` с приоритетом 1 |
+| `app/auth.py` | Argon2-блок сохранён как legacy (приоритет 2), с корректным fallback при ошибке импорта |
+| `tools/hash_password.py` | Переписан на PBKDF2, больше не требует argon2-cffi |
+| `requirements.txt` | Строка `argon2-cffi>=23.1.0` удалена |
+| `config/users.yaml` | Поля `password_argon2` заменены на `password_pbkdf2` |
+
+### Приоритет полей в users.yaml
+
+1. `password_pbkdf2` — PBKDF2-SHA256 (stdlib, рекомендуется)
+2. `password_argon2` — Argon2id (legacy, argon2-cffi)
+3. `password` — открытый текст (только обратная совместимость)
+
 ## Сводная таблица версий
 
 | Версия | Дата | Ключевое изменение |
@@ -627,3 +658,4 @@ URL репозитория читается бэкендом при каждом
 | v1.2.041 | 11.06.2026 | Лог разработки |
 | v1.2.042 | 12.06.2026 | Code review: datetime fix, ffconcat escape, argon2-пароли |
 | v1.2.043 | 12.06.2026 | Проверка обновлений через GitHub API, git pull из меню; исправление кэширования i18n (VERSION bump) |
+| v1.2.044 | 12.06.2026 | Замена argon2-cffi на PBKDF2-SHA256 (stdlib) — совместимость с Python 3.14 |
