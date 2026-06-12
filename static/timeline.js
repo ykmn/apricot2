@@ -303,7 +303,6 @@ const Timeline = (() => {
     }
 
     // Center vertical line
-    ctx.strokeStyle = C.centerLine;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(W / 2, 0);

@@ -1462,7 +1462,8 @@ function connectWebSocket() {
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
 
   ws.addEventListener('message', ev => {
-    const msg = JSON.parse(ev.data);
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'availability_update' && currentChannel && msg.channel_id === currentChannel.id) {
       Timeline.addAvailability(msg.added, msg.removed);
     } else if (msg.type === 'config_reloaded') {

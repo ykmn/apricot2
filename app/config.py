@@ -51,7 +51,11 @@ def _load_secrets() -> dict[int, dict]:
         _secrets = {}
         return _secrets
     data = _open_yaml(secret_path) or {}
-    _secrets = {entry["id"]: entry for entry in data.get("authorization", [])}
+    _secrets = {
+        entry["id"]: entry
+        for entry in data.get("authorization", [])
+        if isinstance(entry, dict) and "id" in entry
+    }
     return _secrets
 
 

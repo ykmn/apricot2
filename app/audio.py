@@ -107,7 +107,7 @@ async def stream_audio(
                 seg_concat = Path(tmpdir) / f"concat_{i:04d}.txt"
                 with seg_concat.open("w", encoding="utf-8") as f:
                     f.write("ffconcat version 1.0\n")
-                    f.write(f"file '{local_path.replace(chr(92), '/')}'\n")
+                    f.write(f"file '{local_path.replace(chr(92), '/').replace(chr(39), chr(92)+chr(39))}'\n")
                     if ss > 0:
                         f.write(f"inpoint {ss}\n")
                     if outpoint is not None:
@@ -133,7 +133,8 @@ async def stream_audio(
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                assert proc.stdout is not None
+                if proc.stdout is None:
+                    raise RuntimeError("ffmpeg subprocess stdout is None")
                 try:
                     while True:
                         chunk = await proc.stdout.read(65536)
@@ -203,7 +204,7 @@ async def export_audio(
         with concat_list.open("w", encoding="utf-8") as f:
             f.write("ffconcat version 1.0\n")
             for idx_f, p in enumerate(input_paths):
-                safe_p = p.replace("\\", "/")
+                safe_p = p.replace("\\", "/").replace("'", "\\'")
                 f.write(f"file '{safe_p}'\n")
                 if idx_f == 0 and ss > 0:
                     f.write(f"inpoint {ss}\n")

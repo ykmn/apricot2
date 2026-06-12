@@ -287,7 +287,7 @@ class FileIndexManager:
                         max_retries: int = 2,
                         timeout: float = 30.0) -> tuple[bool, str]:
         """Scan with retries + per-attempt timeout. Returns (success, error_message)."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         last_error = ""
         for attempt in range(1, max_retries + 1):
             try:
@@ -319,7 +319,7 @@ class FileIndexManager:
         if ch.bitrate is not None:
             return False            # Already configured by user
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # Find a sample relative path to probe
         sample_rel: str | None = None
@@ -466,7 +466,7 @@ class FileIndexManager:
     # ── Poll loop ──────────────────────────────────────────────────────────
 
     async def _poll_loop(self) -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         while True:
             await asyncio.sleep(self._poll_interval)
             for idx in self._indexes.values():

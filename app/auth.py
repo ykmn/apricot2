@@ -13,7 +13,10 @@ Multi-domain support:
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 import secrets
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -107,18 +110,29 @@ def load_sessions() -> None:
 
 
 def _save_sessions() -> None:
-    """Persist active (non-expired) sessions to YAML."""
+    """Persist active (non-expired) sessions to YAML atomically."""
     _cleanup_sessions()
     try:
         SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with SESSIONS_FILE.open("w", encoding="utf-8") as f:
-            yaml.dump(
-                {"sessions": dict(_sessions)},
-                f,
-                allow_unicode=True,
-                default_flow_style=False,
-                sort_keys=False,
-            )
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(SESSIONS_FILE.parent), suffix=".tmp", prefix="sessions_"
+        )
+        try:
+            with open(fd, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    {"sessions": dict(_sessions)},
+                    f,
+                    allow_unicode=True,
+                    default_flow_style=False,
+                    sort_keys=False,
+                )
+            os.replace(tmp_path, str(SESSIONS_FILE))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
     except Exception:
         pass  # non-critical
 
@@ -133,12 +147,29 @@ def load_auth_config() -> Optional[dict]:
         return yaml.safe_load(f) or {}
 
 
+_auth_required_cache: Optional[bool] = None
+
+
 def auth_required() -> bool:
-    """Return True when authentication is configured and at least one method enabled."""
+    """Return True when authentication is configured and at least one method enabled.
+
+    Result is cached; call invalidate_auth_cache() after config changes.
+    """
+    global _auth_required_cache
+    if _auth_required_cache is not None:
+        return _auth_required_cache
     cfg = load_auth_config()
     if cfg is None:
-        return False
-    return bool(cfg.get("LDAP") or cfg.get("Local"))
+        _auth_required_cache = False
+    else:
+        _auth_required_cache = bool(cfg.get("LDAP") or cfg.get("Local"))
+    return _auth_required_cache
+
+
+def invalidate_auth_cache() -> None:
+    """Clear the auth_required() cache so it is re-read from disk on next call."""
+    global _auth_required_cache
+    _auth_required_cache = None
 
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
@@ -194,6 +225,28 @@ def _load_local_users() -> list[dict]:
     with USERS_YAML.open(encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return data.get("users", [])
+
+
+def _check_local_password(entry: dict, password: str) -> bool:
+    """Verify password against a local user entry.
+
+    Checks 'password_argon2' (hashed) first; falls back to plaintext 'password'.
+    Using argon2 is strongly recommended — generate hashes with tools/hash_password.py.
+    """
+    argon2_hash = entry.get("password_argon2")
+    if argon2_hash:
+        try:
+            from argon2 import PasswordHasher
+            from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+            ph = PasswordHasher()
+            return ph.verify(str(argon2_hash), password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            return False
+        except Exception:
+            log.warning("argon2 verification error for user %r", entry.get("username"))
+            return False
+    # Plaintext fallback (legacy — migrate to password_argon2)
+    return hmac.compare_digest(str(entry.get("password", "")), password)
 
 
 # ── LDAP helpers ──────────────────────────────────────────────────────────────
@@ -622,7 +675,7 @@ def authenticate(username: str, password: str) -> Optional[dict]:
         users = _load_local_users()
         local_entry = next((u for u in users if u.get("username") == username), None)
         if local_entry is not None:
-            if str(local_entry.get("password", "")) == password:
+            if _check_local_password(local_entry, password):
                 return {
                     "username":  username,
                     "is_admin":  bool(local_entry.get("is_admin", False)),

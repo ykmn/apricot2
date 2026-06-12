@@ -53,10 +53,10 @@ class PlaylistSource:
 class PlaylistConfig:
     id: str
     name: str
-    sources: list = field(default_factory=list)   # list[PlaylistSource] sorted by priority
-    fields: dict = field(default_factory=dict)
-    class_colors: dict = field(default_factory=dict)
-    class_names: dict = field(default_factory=dict)
+    sources: list[PlaylistSource] = field(default_factory=list)   # sorted by priority
+    fields: dict[str, str] = field(default_factory=dict)
+    class_colors: dict[str, str] = field(default_factory=dict)
+    class_names: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

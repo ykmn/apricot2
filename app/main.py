@@ -10,6 +10,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from contextlib import asynccontextmanager
 from typing import Any
 
 import aiofiles
@@ -127,6 +128,7 @@ def _load_config() -> None:
     _auth.configure(
         session_ttl=int(settings.get("server", {}).get("session_ttl", 7 * 24 * 3600)),
     )
+    _auth.invalidate_auth_cache()
     _srv = settings.get("server", {})
     _app_logger.configure(
         screen_level=str(_srv.get("log_screen", "INFO")),
@@ -170,7 +172,19 @@ def _progress_callback(data: dict) -> None:
 
 file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
 
-app = FastAPI(title="Абрикос 2", version=VERSION)
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
+    log.info("*" * 72)
+    log.info("* Абрикос 2 v%s  —  %s", VERSION,
+             datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    log.info("*" * 72)
+    log.info("Абрикос 2 v%s starting up", VERSION)
+    _auth.load_sessions()
+    asyncio.create_task(_background_startup())
+    yield
+
+
+app = FastAPI(title="Абрикос 2", version=VERSION, lifespan=_lifespan)
 
 STATIC_DIR = PROJECT_ROOT / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -244,16 +258,6 @@ async def _log_requests(request: Request, call_next):
 # Startup
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.on_event("startup")
-async def startup() -> None:
-    log.info("*" * 72)
-    log.info("* Абрикос 2 v%s  —  %s", VERSION,
-             __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    log.info("*" * 72)
-    log.info("Абрикос 2 v%s starting up", VERSION)
-    _auth.load_sessions()
-    asyncio.create_task(_background_startup())
-
 
 async def _background_startup() -> None:
     try:
@@ -325,11 +329,9 @@ def _html_response(filename: str) -> HTMLResponse:
     text = text.replace(
         "</head>",
         f'<script>window.__APP_VERSION__="{VERSION}";window.__BUILD_DATE__="{BUILD_DATE}";</script>\n</head>',
-    ).replace(
-        '.css"', f'.css?v={VERSION}"'
-    ).replace(
-        '.js"', f'.js?v={VERSION}"'
     )
+    text = re.sub(r'((?:href|src)=["\'])([^"\']+\.(?:css|js))(["\'])',
+                  rf'\g<1>\g<2>?v={VERSION}\g<3>', text)
     return HTMLResponse(
         content=text,
         headers={"Cache-Control": "no-store"},
@@ -384,11 +386,13 @@ async def api_login(request: Request) -> JSONResponse:
         "auth_type": user["auth_type"],
         "domain":    user.get("domain", ""),
     })
+    _ssl_enabled = bool(settings.get("server", {}).get("ssl", {}).get("enabled", False))
     resp.set_cookie(
         _auth.COOKIE_NAME, token,
         max_age=_auth.SESSION_TTL,
         httponly=True,
         samesite="lax",
+        secure=_ssl_enabled,
     )
     return resp
 
@@ -631,7 +635,7 @@ async def _export_cleanup_loop() -> None:
         now  = datetime.now()
         next_run = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         if next_run <= now:
-            next_run = next_run.replace(day=next_run.day + 1)
+            next_run = next_run + timedelta(days=1)
         await asyncio.sleep((next_run - now).total_seconds())
         _cleanup_exports()
 

@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
@@ -101,6 +102,9 @@ def _umount_lazy(mount_point: Path) -> None:
 def _mount_linux(smb: SMBConfig, mount_point: Path) -> str:
     """Mount via mount.cifs directly (called with sudo when not root).
 
+    Password is passed via a temporary credentials file to avoid exposing
+    it in the process argument list (visible via ``ps aux``).
+
     sudoers entry required for non-root users:
         <user> ALL=(root) NOPASSWD: /sbin/mount.cifs
     Falls back through SMB versions 3.0→2.1→2.0→1.0 on error(95).
@@ -117,51 +121,69 @@ def _mount_linux(smb: SMBConfig, mount_point: Path) -> str:
     else:
         sec = "ntlmssp"
 
-    base_options = [
-        f"username={smb.username}",
-        f"password={smb.password or ''}",
-        f"uid={os.getuid()}",
-        f"gid={os.getgid()}",
-        "iocharset=utf8",
-        f"sec={sec}",
-    ]
-    if smb.domain:
-        base_options.append(f"domain={smb.domain}")
+    # Write credentials to a temp file so the password is not visible in the
+    # process argument list (ps aux). mkstemp already creates the file 0600.
+    creds_fd, creds_path = tempfile.mkstemp(prefix=".smb_creds_", suffix="")
+    try:
+        with os.fdopen(creds_fd, "w") as f:
+            f.write(f"username={smb.username}\n")
+            f.write(f"password={smb.password or ''}\n")
+            if smb.domain:
+                f.write(f"domain={smb.domain}\n")
 
-    last_err = ""
-    for vers in _SMB_VERSIONS:
-        options = base_options + [f"vers={vers}"]
-        if os.getuid() == 0:
-            cmd = [cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
-        else:
-            cmd = ["sudo", cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if r.returncode == 0:
-                return ""
-            err = (r.stderr or r.stdout).strip() or f"exit code {r.returncode}"
-            # error(16) = Device or resource busy — stale mount, try lazy umount once
-            if "error(16)" in err:
-                _umount_lazy(mount_point)
-                r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-                if r2.returncode == 0:
+        base_options = [
+            f"credentials={creds_path}",
+            f"uid={os.getuid()}",
+            f"gid={os.getgid()}",
+            "iocharset=utf8",
+            f"sec={sec}",
+        ]
+
+        last_err = ""
+        for vers in _SMB_VERSIONS:
+            options = base_options + [f"vers={vers}"]
+            if os.getuid() == 0:
+                cmd = [cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
+            else:
+                cmd = ["sudo", cifs_bin, unc, str(mount_point), "-o", ",".join(options)]
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                if r.returncode == 0:
                     return ""
-                err = (r2.stderr or r2.stdout).strip() or err
-            last_err = err
-            # Only retry with lower version on "Operation not supported" (error 95)
-            if "error(95)" not in err:
-                break
-        except FileNotFoundError:
-            return "mount.cifs not found — установите: sudo apt install cifs-utils"
-        except subprocess.TimeoutExpired:
-            return "timeout (15 s)"
-        except Exception as exc:
-            return str(exc)
-    return last_err
+                err = (r.stderr or r.stdout).strip() or f"exit code {r.returncode}"
+                # error(16) = Device or resource busy — stale mount, try lazy umount once
+                if "error(16)" in err:
+                    _umount_lazy(mount_point)
+                    r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                    if r2.returncode == 0:
+                        return ""
+                    err = (r2.stderr or r2.stdout).strip() or err
+                last_err = err
+                # Only retry with lower version on "Operation not supported" (error 95)
+                if "error(95)" not in err:
+                    break
+            except FileNotFoundError:
+                return "mount.cifs not found — установите: sudo apt install cifs-utils"
+            except subprocess.TimeoutExpired:
+                return "timeout (15 s)"
+            except Exception as exc:
+                return str(exc)
+        return last_err
+    finally:
+        try:
+            os.unlink(creds_path)
+        except OSError:
+            pass
 
 
 def _mount_macos(smb: SMBConfig, mount_point: Path) -> str:
-    """Mount via mount_smbfs (does not require sudo for regular users)."""
+    """Mount via mount_smbfs (does not require sudo for regular users).
+
+    NOTE: mount_smbfs has no credentials-file option and its ``-N`` flag
+    (read password from stdin) is unreliable across macOS versions, so the
+    password is embedded in the URL.  It is still visible in ``ps`` output
+    on macOS — this is an OS-level limitation.
+    """
     from urllib.parse import quote as _q
     user = smb.username or ""
     pwd  = smb.password or ""
