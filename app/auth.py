@@ -238,8 +238,11 @@ def _check_local_password(entry: dict, password: str) -> bool:
         try:
             from argon2 import PasswordHasher
             from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
-            ph = PasswordHasher()
-            return ph.verify(str(argon2_hash), password)
+        except ImportError:
+            log.warning("argon2-cffi not installed; cannot verify hashed password for %r", entry.get("username"))
+            return False
+        try:
+            return PasswordHasher().verify(str(argon2_hash), password)
         except (VerifyMismatchError, VerificationError, InvalidHashError):
             return False
         except Exception:
