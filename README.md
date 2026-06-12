@@ -330,16 +330,18 @@ LDAP:  false  # доменная авторизация отключена
 ```yaml
 users:
   - username: admin
-    password: yourStrongPassword     # открытый текст (устаревший способ)
+    password: yourStrongPassword     # открытый текст (не рекомендуется)
+    password_pbkdf2: "$pbkdf2$sha256$600000$<salt>$<hash>".  # хэш пароля PBKDF2-SHA256
     is_admin: true    # доступ к функциям управления в меню
 
   - username: user
-    password: secret
+    password_pbkdf2: "$pbkdf2$sha256$600000$<salt>$<hash>".  # хэш пароля PBKDF2-SHA256
     is_admin: false   # только навигация и экспорт
 ```
 
 > [!TIP]
-> **Хранение паролей в виде хэша (рекомендуется).** Вместо `password:` используйте `password_pbkdf2:` — пароль хранится в виде необратимого хэша (PBKDF2-SHA256, 600 000 итераций) и не может быть восстановлен при чтении файла. Внешних зависимостей не требует. Сгенерируйте хэш утилитой:
+> **Хранение паролей в виде хэша (рекомендуется).**
+> Вместо `password:` используйте `password_pbkdf2:` — пароль хранится в виде необратимого хэша (PBKDF2-SHA256). Генерируйте хэш утилитой:
 > ```bash
 > python tools/hash_password.py
 > ```
@@ -350,7 +352,7 @@ users:
 >     password_pbkdf2: "$pbkdf2$sha256$600000$<salt>$<hash>"
 >     is_admin: true
 > ```
-> Приоритет полей: `password_pbkdf2` → `password_argon2` (legacy) → `password` (открытый текст).
+> Приоритет полей: `password_pbkdf2` → `password` (открытый текст).
 
 > [!WARNING]
 > Если файл `users.yaml` отсутствует, при каждом запуске приложение генерирует **случайный одноразовый пароль** для пользователя `admin` и выводит его в stderr:

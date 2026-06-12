@@ -12,8 +12,8 @@ import sys
 
 
 def main() -> None:
-    print("Generate a PBKDF2-SHA256 hash for a password (hashlib stdlib, no external deps).")
-    password = getpass.getpass("Enter password: ")
+    print("\nGenerate a PBKDF2-SHA256 hash for a password (hashlib stdlib, no external deps).")
+    password = getpass.getpass("Enter a password: ")
     if not password:
         print("Empty password — aborted.", file=sys.stderr)
         sys.exit(1)
@@ -31,6 +31,7 @@ def main() -> None:
     print(hashed)
     print("\nYAML snippet (add to config/users.yaml):")
     print(f'    password_pbkdf2: "{hashed}"')
+    print("\n")
 
 
 if __name__ == "__main__":

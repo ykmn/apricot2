@@ -262,35 +262,15 @@ def _verify_pbkdf2(stored: str, password: str, username: object = None) -> bool:
 def _check_local_password(entry: dict, password: str) -> bool:
     """Verify password against a local user entry.
 
-    Checks 'password_argon2' (hashed) first; falls back to plaintext 'password'.
-    Using argon2 is strongly recommended — generate hashes with tools/hash_password.py.
+    Checks 'password_pbkdf2' first; falls back to plaintext 'password'.
+    Generate hashes with: python tools/hash_password.py
     """
     # 1. PBKDF2-SHA256 hash (stdlib, no external deps) ────────────────────────
     pbkdf2_hash = entry.get("password_pbkdf2")
     if pbkdf2_hash:
         return _verify_pbkdf2(pbkdf2_hash, password, entry.get("username"))
 
-    # 2. Legacy argon2 hash (argon2-cffi) ─────────────────────────────────────
-    argon2_hash = entry.get("password_argon2")
-    if argon2_hash:
-        try:
-            from argon2 import PasswordHasher
-            from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
-        except Exception as _imp_err:
-            log.warning(
-                "argon2-cffi unavailable for user %r (%s: %s); falling back to plaintext",
-                entry.get("username"), type(_imp_err).__name__, _imp_err,
-            )
-        else:
-            try:
-                return PasswordHasher().verify(str(argon2_hash), password)
-            except (VerifyMismatchError, VerificationError, InvalidHashError):
-                return False
-            except Exception as _exc:
-                log.warning("argon2 verification error for user %r: %s", entry.get("username"), _exc)
-                return False
-
-    # 3. Plaintext fallback ───────────────────────────────────────────────────
+    # 2. Plaintext fallback ───────────────────────────────────────────────────
     return hmac.compare_digest(str(entry.get("password", "")), password)
 
 

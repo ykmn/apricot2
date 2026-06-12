@@ -22,8 +22,6 @@ sortedcontainers>=2.4.0        # SortedList для быстрого поиска
 ldap3>=2.9.1
 # MD4 fallback для NTLM на Python 3.x + OpenSSL 3.x (OpenSSL 3 убрал MD4 из hashlib).
 pycryptodome>=3.19.0
-# Хэширование паролей локальных пользователей — hashlib.pbkdf2_hmac (stdlib, внешних зависимостей нет).
-# argon2-cffi больше не требуется; legacy-поле password_argon2 в users.yaml ещё поддерживается.
 
 # ── Kerberos / GSSAPI (опционально, Linux) ────────────────────────────────────
 # Нужен только при auth_protocol: kerberos в конфиге SMB-источника (кросс-доменный доступ).
