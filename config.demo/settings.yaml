@@ -35,3 +35,7 @@ ffmpeg_path: "ffmpeg"
 ui:
   # Timezone for display (e.g. "Europe/Moscow", "UTC")
   timezone: "Europe/Moscow"
+
+# Update source — GitHub repository for checking new commits
+update:
+  repo_url: "https://github.com/ykmn/apricot2/"
