@@ -7,13 +7,13 @@
 ## Требования
 
 - Python 3.9+
-- [**ffmpeg**](https://ffmpeg.org/download.html) — должен быть установлен и доступен в PATH (или путь указан в `config/settings.yaml`)
+- [**ffmpeg**](https://ffmpeg.org/download.html) должен быть установлен и доступен в PATH (или путь указан в `config/settings.yaml`)
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `apt install ffmpeg`
   - Windows: `winget install -e --id Gyan.FFmpeg`
 - прочитать документацию последовательно и полностью.
 
-## Установка Python
+## Установка Python и системных пакетов
 
 ### Linux (Ubuntu / Debian)
 
@@ -27,9 +27,6 @@ sudo apt install cifs-utils
 # Для Kerberos / GSSAPI (только при auth_protocol: kerberos в конфиге SMB)
 sudo apt install gcc libkrb5-dev
 ```
-
-> [!WARNING]
-> На Ubuntu 23.04+ и Debian 12+ прямой `pip install` **намеренно заблокирован системой** — используйте виртуальное окружение (см. ниже).
 
 ### macOS
 
@@ -59,14 +56,14 @@ winget install Gyan.FFmpeg Python.Python.3.12
 python --version
 ```
 
-## Установка
+## Установка пакетов Python в виртуальное окружение
 
 ```bash
 git clone https://github.com/ykmn/apricot2
 cd apricot2
 ```
 
-> [!TIP]
+> [!WARNING]
 > На всех платформах используйте **виртуальное окружение** — это изолирует пакеты проекта от системного Python и избавляет от ошибки `externally-managed-environment` (Ubuntu 23.04+ / Debian 12+).
 
 ```bash
@@ -162,6 +159,8 @@ authorization:
 
 ### Конфигурация станций
 
+В файле конфигурации станции для одной **радиостанции** может быть несколько **каналов** записи из разных источников: PGM, FM, SAT и т.д.; используйте YAML-массив **channels:**
+
 #### Подключение через SMB (network share)
 
 Используйте `secret: N`, где N — `id` из `config/secret.yaml`:
@@ -186,6 +185,20 @@ channels:
     playlogs:
       - retrofm
     playlogs_offset: 500       # смещение плейлога относительно аудио в мс (положительное — вперёд, отрицательное — назад; по умолчанию 0)
+  - id: retrofm_fm
+    name: "Retro FM — FM (mp3/64k)"
+    smb:
+      host: "fileserver.domain.local"
+      share: "LOGGER"
+      path: "04 Retro/FM"
+      secret: 1
+    folder_format: "%Y-%m-%d"
+    file_format: "%H-%M-%S"
+    file_extension: "mp3"
+    sample_rate: 48000
+    playlogs:
+      - retrofm
+    playlogs_offset: 750
 ```
 
 Путь на сервере формируется как: `\\host\share\path\<папка-даты>\<файл-время>.ext`.
@@ -247,7 +260,7 @@ channels:
 
 ### Плейлог
 
-Каждый файл конфигурации описывает **один плейлог** Дигиспот Джин Вещание, обычно находящийся в папке `C:\Program Files (x86)\DJin\PlayLog`. Однако у каждого плейлога может быть несколько источников с разным приоритетом: основной и резервный эфирный компьютер в горячем резерве.
+Каждый файл конфигурации описывает **один плейлог** Дигиспот Джин Вещание, обычно находящийся в папке `C:\Program Files (x86)\DJin\PlayLog`. Однако у каждого плейлога может быть несколько источников с разным приоритетом: основной и резервный эфирный компьютер в горячем резерве. Используйте YAML-массив **sources:**
 
 **Стратегия слияния источников:**
 - Данные приоритета 1 служат основой.
@@ -318,6 +331,14 @@ class_names:
 
 Авторизация **по умолчанию отключена**. Чтобы включить её, создайте файл `config/ldap.yaml`. Если файл отсутствует, приложение открывается без запроса входа.
 
+> [!WARNING]
+> Если файл `config/ldap.yaml` создан, но `config/users.yaml` отсутствует, при каждом запуске приложение генерирует **случайный одноразовый пароль** для локального пользователя `admin` и выводит его в stderr:
+> ```
+> [auth] WARNING: config/users.yaml not found. Temporary admin credentials — login: admin  password: xK9mQz…
+> [auth] Create config/users.yaml to set permanent credentials.
+> ```
+> Создайте `config/users.yaml` с постоянными учётными данными до публичного развёртывания.
+
 #### Локальные пользователи (`Local: true`)
 
 **`config/ldap.yaml`:**
@@ -354,13 +375,6 @@ users:
 > ```
 > Приоритет полей: `password_pbkdf2` → `password` (открытый текст).
 
-> [!WARNING]
-> Если файл `users.yaml` отсутствует, при каждом запуске приложение генерирует **случайный одноразовый пароль** для пользователя `admin` и выводит его в stderr:
-> ```
-> [auth] WARNING: config/users.yaml not found. Temporary admin credentials — login: admin  password: xK9mQz…
-> [auth] Create config/users.yaml to set permanent credentials.
-> ```
-> Создайте `config/users.yaml` с постоянными учётными данными до публичного развёртывания.
 
 #### Доменная авторизация Windows AD (`LDAP: true`)
 

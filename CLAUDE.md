@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Do not commit without special user's command. Update developing history in `docs/` folder after every commit.
+Do not commit without special user's command. Update developing history in `docs/` folder before every commit.
 
 
 ## Project overview
