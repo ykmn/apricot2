@@ -178,7 +178,9 @@ def open_file(local_path: str | None, smb: SMBConfig | None, rel: str) -> io.Raw
         return open(Path(local_path) / rel, "rb")
     if smb:
         _register(smb)
-        return smbclient.open_file(_unc(smb, rel), mode="rb")
+        # share_access="r" maps to FILE_SHARE_READ, allowing concurrent
+        # access when the remote recorder still holds the file open for writing.
+        return smbclient.open_file(_unc(smb, rel), mode="rb", share_access="r")
     raise ValueError("No path source configured")
 
 

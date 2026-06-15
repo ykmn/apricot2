@@ -194,6 +194,7 @@ function initChannelSearch() {
 
   copy.disabled = true;
   btn.classList.add('no-channel');
+  document.getElementById('channel-label')?.classList.add('no-channel');
 
   copy.addEventListener('click', async () => {
     const path = _channelFolderPath(currentChannel || {});
@@ -303,6 +304,7 @@ function selectChannel(ch, st) {
   });
   document.getElementById('channel-dropdown').classList.add('hidden');
   document.getElementById('channel-list-btn').classList.remove('no-channel');
+  document.getElementById('channel-label').classList.remove('no-channel');
 
   const wasPlaying = isPlaying;
   if (wasPlaying) stopPlay();
@@ -1785,6 +1787,7 @@ function _reapplyDynamicTexts() {
       lbl.textContent = I18n.t('channel.select_prompt');
     }
     document.getElementById('channel-list-btn')?.classList.add('no-channel');
+    document.getElementById('channel-label')?.classList.add('no-channel');
   }
 
   // Copy button title

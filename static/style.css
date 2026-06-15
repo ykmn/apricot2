@@ -192,6 +192,13 @@ body {
 #channel-list-btn.no-channel {
   animation: channel-btn-pulse 1.4s ease-in-out infinite;
 }
+@keyframes channel-label-pulse {
+  0%, 100% { color: var(--text); }
+  50%       { color: var(--danger); }
+}
+#channel-label.no-channel {
+  animation: channel-label-pulse 2s ease-in-out infinite;
+}
 #btn-copy-url {
   flex: 0 0 34px;
   width: 34px;
