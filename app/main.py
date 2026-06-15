@@ -24,13 +24,13 @@ from . import auth as _auth
 
 from . import app_logger as _app_logger
 from .app_logger import get_logger
-from .audio import export_audio, set_ffmpeg_path, stream_audio, stream_audio_single_file
+from .audio import export_audio, set_ffmpeg_path, stream_audio
 from .config import load_playlists, load_settings, load_stations
 from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.050"
+VERSION = "1.2.049"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -816,7 +816,6 @@ async def get_playlist_config(channel_id: str) -> dict:
 
 @app.get("/api/audio/stream")
 async def audio_stream(
-    request: Request,
     channel:     str   = Query(...),
     start:       float = Query(...),
     end:         float = Query(...),
@@ -832,64 +831,22 @@ async def audio_stream(
     media_types = {"mp3": "audio/mpeg", "wav": "audio/wav", "aac": "audio/aac"}
     media_type  = media_types.get(format, "audio/mpeg")
 
-    # Check if single-file copy-mode is possible
-    idx = file_index.get_index(channel)
-    native_ext = channel_cfg.file_extension.lower()
-    copy_mode_eligible = (format == native_ext and native_ext in ("mp3", "aac"))
-
-    # Parse Range header
-    range_header = request.headers.get("range")
-    range_start = None
-    range_end = None
-    if range_header and range_header.startswith("bytes="):
-        try:
-            range_spec = range_header[6:].strip()
-            start_str, end_str = range_spec.split("-", 1)
-            range_start = int(start_str) if start_str else 0
-            range_end = int(end_str) if end_str else None
-        except Exception:
-            range_start = None
-            range_end = None
-
     log.info(
-        "Stream %s  %s → %s  fmt=%s br=%s range=%s",
+        "Stream %s  %s → %s  fmt=%s br=%s",
         channel, start_dt.strftime("%Y-%m-%d %H:%M:%S"),
         end_dt.strftime("%H:%M:%S"), format, bitrate,
-        f"{range_start}-{range_end}" if range_start is not None else "none",
     )
 
-    # Single-file copy-mode with Range support
-    if idx and copy_mode_eligible:
-        files = idx.files_for_range(start_dt, end_dt)
-        if len(files) == 1:
-            af = files[0]
-            file_start_offset = max(0.0, (start_dt - af.start_dt).total_seconds())
-            file_end_offset = (end_dt - af.start_dt).total_seconds()
-
-            # Use single-file streamer with Range support
-            gen, meta = await stream_audio_single_file(
-                channel_cfg, af, file_start_offset, file_end_offset,
-                format, bitrate, sample_rate, True, range_start, range_end
-            )
-
-            headers = {
-                "Accept-Ranges": meta["accept_ranges"],
-                "Content-Length": str(meta["content_length"]),
-            }
-            if meta["content_range"]:
-                headers["Content-Range"] = meta["content_range"]
-                # For Range requests, return 206 Partial Content
-                return StreamingResponse(gen(), media_type=media_type, headers=headers, status_code=206)
-
-            return StreamingResponse(gen(), media_type=media_type, headers=headers)
-
-    # Fallback: multi-file or transcoding - no Range support
     async def gen():
         inner = stream_audio(channel_cfg, start_dt, end_dt, format, bitrate, sample_rate)
         try:
             async for chunk in inner:
                 yield chunk
         finally:
+            # aclose() must not be called while the generator frame is still
+            # on the stack (e.g. when the client disconnects mid-chunk and
+            # uvicorn cancels the task).  Shield the call so it runs after
+            # the current frame unwinds; suppress errors if already closed.
             try:
                 await asyncio.shield(inner.aclose())
             except Exception:
