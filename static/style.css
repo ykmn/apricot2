@@ -755,6 +755,61 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 .modal-buttons { display: flex; gap: 8px; justify-content: flex-end; }
 #export-progress { font-style: italic; color: var(--text2); }
 
+/* ── Sessions modal ──────────────────────────────────────── */
+.sessions-box {
+  max-width: 860px;
+  width: 100%;
+}
+#sessions-table-wrap {
+  overflow-x: auto;
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+#sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+#sessions-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg3);
+  color: var(--text2);
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 12px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+#sessions-table tbody tr:nth-child(even) { background: var(--bg3); }
+#sessions-table tbody tr:hover { background: var(--hover); }
+#sessions-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+#sessions-table td.sess-current { font-weight: 700; }
+.sess-admin-yes { color: var(--accent); }
+.sess-admin-no  { color: var(--text2); }
+.sessions-legend {
+  font-size: 11px;
+  color: var(--text2);
+}
+.btn-terminate {
+  background: transparent;
+  border: 1px solid var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.btn-terminate:hover { background: var(--danger, #c0392b); color: #fff; }
+.btn-terminate:disabled { opacity: 0.35; cursor: default; }
+
 /* ── About modal ─────────────────────────────────────────── */
 .about-box {
   max-width: 480px;
@@ -1178,5 +1233,9 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
     max-height: calc(6 * 45px);
     overflow-y: auto;
   }
+
+  /* ── Sessions modal: full-width table ───────────────── */
+  .sessions-box { max-width: 98vw; }
+  #sessions-table th, #sessions-table td { font-size: 11px; padding: 6px 8px; }
 
 }

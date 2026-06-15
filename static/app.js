@@ -1673,6 +1673,22 @@ function initHamburgerMenu() {
     _showUpdateModal(data);
   });
 
+  // Sessions
+  document.getElementById('menu-sessions').addEventListener('click', () => {
+    menu.classList.add('hidden');
+    _openSessionsModal();
+  });
+
+  // Sessions modal buttons
+  document.getElementById('sessions-refresh').addEventListener('click', _loadSessions);
+  document.getElementById('sessions-close').addEventListener('click', () => {
+    document.getElementById('sessions-modal').classList.add('hidden');
+  });
+  document.getElementById('sessions-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('sessions-modal'))
+      document.getElementById('sessions-modal').classList.add('hidden');
+  });
+
   // About
   document.getElementById('menu-about').addEventListener('click', () => {
     menu.classList.add('hidden');
@@ -1756,6 +1772,70 @@ function _showUpdateModal(data) {
 
 function _escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _fmtTs(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function _loadSessions() {
+  const tbody = document.getElementById('sessions-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2)">…</td></tr>';
+  let data;
+  try {
+    const r = await fetch('/api/admin/sessions');
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger,#c0392b)">${_escHtml(String(e))}</td></tr>`;
+    return;
+  }
+  const sessions = data.sessions || [];
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2)">—</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  sessions.forEach(s => {
+    const tr = document.createElement('tr');
+    const userCell = s.is_current
+      ? `<td class="sess-current">★ ${_escHtml(s.username)}</td>`
+      : `<td>${_escHtml(s.username)}</td>`;
+    const domainCell = `<td>${_escHtml(s.domain || '—')}</td>`;
+    const adminCell  = s.is_admin
+      ? `<td class="sess-admin-yes">✓</td>`
+      : `<td class="sess-admin-no">—</td>`;
+    const createdCell = `<td>${_fmtTs(s.created_at)}</td>`;
+    const expiresCell = `<td>${_fmtTs(s.expires)}</td>`;
+    const ipCell      = `<td>${_escHtml(s.ip || '—')}</td>`;
+    const btnLabel    = I18n.t('sessions.btn_terminate');
+    const actionCell  = s.is_current
+      ? '<td></td>'
+      : `<td><button class="btn-terminate" data-sid="${_escHtml(s.id)}">${_escHtml(btnLabel)}</button></td>`;
+    tr.innerHTML = userCell + domainCell + adminCell + createdCell + expiresCell + ipCell + actionCell;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.btn-terminate').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const r = await fetch(`/api/admin/sessions/${btn.dataset.sid}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error(r.status);
+        await _loadSessions();
+      } catch (e) {
+        btn.disabled = false;
+        alert('Error: ' + e);
+      }
+    });
+  });
+}
+
+function _openSessionsModal() {
+  document.getElementById('sessions-modal').classList.remove('hidden');
+  _loadSessions();
 }
 
 function _showAboutModal() {

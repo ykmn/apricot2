@@ -174,17 +174,50 @@ def invalidate_auth_cache() -> None:
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
-def create_session(username: str, is_admin: bool, auth_type: str, domain: str = "") -> str:
+def create_session(username: str, is_admin: bool, auth_type: str, domain: str = "", ip: str = "") -> str:
     token = secrets.token_urlsafe(32)
     _sessions[token] = {
-        "username":  username,
-        "is_admin":  is_admin,
-        "auth_type": auth_type,
-        "domain":    domain,
-        "expires":   time.time() + SESSION_TTL,
+        "username":   username,
+        "is_admin":   is_admin,
+        "auth_type":  auth_type,
+        "domain":     domain,
+        "ip":         ip,
+        "created_at": time.time(),
+        "expires":    time.time() + SESSION_TTL,
     }
     _save_sessions()
     return token
+
+
+def list_sessions(current_token: str | None = None) -> list[dict]:
+    """Return sanitised session list (no tokens) for admin UI."""
+    _cleanup_sessions()
+    result = []
+    for token, sess in _sessions.items():
+        sid = hashlib.sha256(token.encode()).hexdigest()[:16]
+        result.append({
+            "id":         sid,
+            "username":   sess.get("username", ""),
+            "domain":     sess.get("domain", ""),
+            "is_admin":   sess.get("is_admin", False),
+            "auth_type":  sess.get("auth_type", ""),
+            "ip":         sess.get("ip", ""),
+            "created_at": sess.get("created_at"),
+            "expires":    sess.get("expires"),
+            "is_current": (token == current_token),
+        })
+    result.sort(key=lambda s: s.get("created_at") or 0, reverse=True)
+    return result
+
+
+def terminate_session_by_id(sid: str) -> bool:
+    """Terminate a session by its hashed ID. Returns True if found and removed."""
+    for token in list(_sessions):
+        if hashlib.sha256(token.encode()).hexdigest()[:16] == sid:
+            _sessions.pop(token, None)
+            _save_sessions()
+            return True
+    return False
 
 
 def get_session(token: str) -> Optional[dict]:
