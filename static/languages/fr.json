@@ -13,6 +13,7 @@
     "logout": "🚪 Se déconnecter",
     "language": "🌐 Langue",
     "about": "ℹ️ À propos…",
+    "sessions": "👥 Sessions…",
     "check_updates": "🔎 Vérifier les mises à jour…"
   },
   "channel": {
@@ -89,13 +90,27 @@
     "segments": "FRAGMENTS SÉLECTIONNÉS",
     "segments_empty_hint": "Sélectionnez une chaîne d'enregistrement dans la liste.\n\nBoutons à droite de la liste des chaînes :\n⧉ — copier le chemin vers le serveur contenant les fichiers audio\n# — copier un lien vers la chaîne et l'instant sélectionnés\n\nHorloge : choisissez l'heure souhaitée en cliquant (gauche/droit) sur la date et l'heure, ou faites défiler la timeline avec la molette.\n\nDéfinissez le début du fragment avec le bouton In.\nDéfinissez la fin du fragment avec le bouton Out.\nAjoutez le fragment à la liste des sélectionnés.\n\nCliquez sur « Exporter », choisissez le format et téléchargez le fichier audio.\n\nPlusieurs fragments peuvent être téléchargés en une fois avec le bouton « Tout télécharger »."
   },
+  "sessions": {
+    "title": "👥 Sessions actives",
+    "col_user": "Utilisateur",
+    "col_domain": "Domaine",
+    "col_admin": "Admin",
+    "col_created": "Connexion",
+    "col_expires": "Expiration",
+    "col_ip": "Adresse IP",
+    "col_action": "Action",
+    "btn_terminate": "Terminer",
+    "btn_refresh": "Actualiser",
+    "legend": "★ — session actuelle"
+  },
   "btn": {
     "download_all": "Tout télécharger",
     "clear": "Effacer",
     "export": "Exporter",
     "cancel": "Annuler",
     "hide_title": "Masquer",
-    "ok": "OK"
+    "ok": "OK",
+    "close": "Fermer"
   },
   "playlist": {
     "select_title": "Sélectionner le fragment sur la timeline\nShift+clic — étendre la sélection actuelle"

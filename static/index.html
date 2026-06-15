@@ -40,6 +40,7 @@
         <div class="menu-sep" data-admin-only></div>
         <button class="menu-item" id="menu-restart" data-admin-only data-i18n="menu.restart_server">🔁 Перезапустить сервер</button>
         <div class="menu-sep" data-admin-only></div>
+        <button class="menu-item" id="menu-sessions"      data-admin-only data-i18n="menu.sessions">👥 Сессии…</button>
         <button class="menu-item" id="menu-check-updates" data-admin-only data-i18n="menu.check_updates">🔎 Проверить обновления…</button>
         <div class="menu-sep"></div>
         <span class="menu-version" id="menu-ver">v…</span>
@@ -220,6 +221,34 @@
       <div class="modal-buttons">
         <button id="exp-ok"     class="btn-green" data-i18n="btn.export">Экспортировать</button>
         <button id="exp-cancel" class="btn-danger" data-i18n="btn.cancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sessions modal ──────────────────────────────────────────── -->
+  <div id="sessions-modal" class="modal hidden">
+    <div class="modal-box sessions-box">
+      <h3 data-i18n="sessions.title">👥 Активные сессии</h3>
+      <div id="sessions-table-wrap">
+        <table id="sessions-table">
+          <thead>
+            <tr>
+              <th data-i18n="sessions.col_user">Пользователь</th>
+              <th data-i18n="sessions.col_domain">Домен</th>
+              <th data-i18n="sessions.col_admin">Админ</th>
+              <th data-i18n="sessions.col_created">Вход</th>
+              <th data-i18n="sessions.col_expires">Истекает</th>
+              <th data-i18n="sessions.col_ip">IP-адрес</th>
+              <th data-i18n="sessions.col_action">Действие</th>
+            </tr>
+          </thead>
+          <tbody id="sessions-tbody"></tbody>
+        </table>
+      </div>
+      <div id="sessions-legend" class="sessions-legend" data-i18n="sessions.legend">★ — текущая сессия</div>
+      <div class="modal-buttons">
+        <button id="sessions-refresh" class="btn-action" data-i18n="sessions.btn_refresh">Обновить</button>
+        <button id="sessions-close"   class="btn-green"  data-i18n="btn.close">Закрыть</button>
       </div>
     </div>
   </div>

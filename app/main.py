@@ -30,7 +30,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.050"
+VERSION = "1.2.051"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -372,7 +372,8 @@ async def api_login(request: Request) -> JSONResponse:
                     request.client.host if request.client else "—")
         raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
 
-    token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"], user.get("domain", ""))
+    client_ip = request.client.host if request.client else ""
+    token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"], user.get("domain", ""), client_ip)
     log.info(
         "Login: user=%s auth=%s domain=%s admin=%s ip=%s",
         user["username"],
@@ -594,6 +595,31 @@ async def restart_server(request: Request) -> dict:
         await asyncio.sleep(0.3)
         os._exit(0)
     asyncio.create_task(_do_restart())
+    return {"ok": True}
+
+
+@app.get("/api/admin/sessions")
+async def admin_list_sessions(request: Request) -> dict:
+    """List all active sessions for admin UI."""
+    _require_admin(request)
+    current_token = request.cookies.get(_auth.COOKIE_NAME)
+    return {"sessions": _auth.list_sessions(current_token)}
+
+
+@app.delete("/api/admin/sessions/{session_id}")
+async def admin_terminate_session(session_id: str, request: Request) -> dict:
+    """Forcibly terminate a session by its hashed ID."""
+    _require_admin(request)
+    current_token = request.cookies.get(_auth.COOKIE_NAME)
+    current_sid = None
+    if current_token:
+        import hashlib as _hl
+        current_sid = _hl.sha256(current_token.encode()).hexdigest()[:16]
+    if session_id == current_sid:
+        raise HTTPException(status_code=400, detail="Cannot terminate your own session via this endpoint")
+    found = _auth.terminate_session_by_id(session_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Session not found")
     return {"ok": True}
 
 

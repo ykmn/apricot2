@@ -13,6 +13,7 @@
     "logout": "🚪 Log out",
     "language": "🌐 Language",
     "about": "ℹ️ About…",
+    "sessions": "👥 Sessions…",
     "check_updates": "🔎 Check for updates…"
   },
   "channel": {
@@ -89,13 +90,27 @@
     "segments": "SELECTED FRAGMENTS",
     "segments_empty_hint": "Select a <b>recording channel</b> from the list.<br><br><b>Buttons</b> to the right of the channel list:<br>⧉ — copy the path to the server with the physical audio files<br># — copy a link to the selected channel and time<br><br><b>Clock:</b> select the date-time you need by left/right-clicking on the date and hour fields, or scroll the timeline with the mouse wheel.<br><br>Set the <b>fragment</b> start with the In button.<br>Set the fragment end with the Out button.<br>Add the fragment to the selected list.<br><br>Click «Export», choose the format, and download the audio file.<br><br>Multiple selected fragments can be downloaded at once with the «Download all» button."
   },
+  "sessions": {
+    "title": "👥 Active sessions",
+    "col_user": "User",
+    "col_domain": "Domain",
+    "col_admin": "Admin",
+    "col_created": "Signed in",
+    "col_expires": "Expires",
+    "col_ip": "IP address",
+    "col_action": "Action",
+    "btn_terminate": "Terminate",
+    "btn_refresh": "Refresh",
+    "legend": "★ — current session"
+  },
   "btn": {
     "download_all": "Download all",
     "clear": "Clear",
     "export": "Export",
     "cancel": "Cancel",
     "hide_title": "Hide",
-    "ok": "OK"
+    "ok": "OK",
+    "close": "Close"
   },
   "playlist": {
     "select_title": "Select fragment on timeline\nShift+click — extend current selection"
