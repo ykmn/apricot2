@@ -13,6 +13,11 @@ let playAnimFrame   = null;
 let _tlAnimUpdate   = false;   // true only during animation-frame setTime calls
 let _seekPending    = false;   // true while user scrolled and audio hasn't started yet
 
+// Current audio file boundaries for native seek optimization
+let currentFileStart = null;   // absolute timestamp of current file start
+let currentFileEnd   = null;   // absolute timestamp of current file end
+let currentFileChannelId = null; // channel.id of current file
+
 const _LOG_KEY = 'apricot-logitems';
 
 const audio = document.getElementById('audio-player');
@@ -484,6 +489,10 @@ function initTransport() {
     playStartTime = Date.now();
     _seekPending  = false;
     _hidePlayLoading();
+    // Initialize file boundaries if not already set (fallback)
+    if (currentFileStart === null && currentChannel) {
+      _updateCurrentFileBoundaries(playFromTs);
+    }
   });
 
   audio.addEventListener('ended',   () => stopPlay());
@@ -506,15 +515,12 @@ function togglePlay() {
 function startPlay() {
   const ts = Timeline.getCenterTime();
   const { start: selS, end: selE } = Timeline.getSelection();
-  // Always start from the current timeline position.
-  // Use the selection end as the stop point only when the timeline is within
-  // the selection; otherwise fall back to +1 hour.
   const startTs = ts;
   const endTs   = (selE !== null && ts <= selE) ? selE : startTs + 3600;
 
   isPlaying  = true;
   playFromTs = startTs;
-  _seekPending = true;   // hold animation until audio fires 'playing'
+  _seekPending = true;
   document.getElementById('btn-play').textContent = '⏸';
   _showPlayLoading();
 
@@ -522,6 +528,37 @@ function startPlay() {
   audio.src = url;
   audio.play().catch(e => { console.warn('Playback failed:', e); stopPlay(); });
   _startPlayheadAnimation();
+
+  // Fetch availability to determine current file boundaries for native seek
+  _updateCurrentFileBoundaries(startTs);
+}
+
+async function _updateCurrentFileBoundaries(ts) {
+  if (!currentChannel) return;
+  try {
+    // Fetch availability for a wider range to find the file containing ts
+    const resp = await api(`/api/availability/${currentChannel.id}?start=${ts - 86400}&end=${ts + 86400}`);
+    if (!Array.isArray(resp)) return;
+    for (const interval of resp) {
+      if (interval.start <= ts && interval.end >= ts) {
+        currentFileStart = interval.start;
+        currentFileEnd = interval.end;
+        currentFileChannelId = currentChannel.id;
+        break;
+      }
+    }
+  } catch (e) {
+    // Ignore errors, fallback will work
+  }
+}
+
+function _isNativeSeekPossible(ts) {
+  if (!isPlaying || !currentChannel) return false;
+  if (currentChannel.id !== currentFileChannelId) return false;
+  const nativeExt = currentChannel.file_extension?.toLowerCase();
+  if (!['mp3', 'aac'].includes(nativeExt)) return false; // only copy-mode formats
+  return currentFileStart !== null && currentFileEnd !== null &&
+         ts >= currentFileStart && ts <= currentFileEnd;
 }
 
 function stopPlay() {
@@ -529,6 +566,10 @@ function stopPlay() {
   audio.src   = '';
   isPlaying   = false;
   _seekPending = false;
+  // Reset file boundaries for native seek
+  currentFileStart = null;
+  currentFileEnd = null;
+  currentFileChannelId = null;
   document.getElementById('btn-play').textContent = '▶';
   cancelAnimationFrame(playAnimFrame);
   _hidePlayLoading();
@@ -559,6 +600,18 @@ function _debouncedSeek(ts) {
 
 function _seekPlayback(ts) {
   if (!isPlaying || !currentChannel) { _seekPending = false; return; }
+
+  // Try native seek within current file (instant, no network request)
+  if (_isNativeSeekPossible(ts)) {
+    const offset = ts - playFromTs;
+    audio.currentTime = Math.max(0, offset);
+    playFromTs = ts;
+    _seekPending = false;
+    _hidePlayLoading();
+    return;
+  }
+
+  // Fallback: full stream restart (original behavior)
   playFromTs = ts;
   _showPlayLoading();
   const { start: selS, end: selE } = Timeline.getSelection();
@@ -570,6 +623,9 @@ function _seekPlayback(ts) {
     _seekPending = false;
     _hidePlayLoading();
   });
+
+  // Update file boundaries for new stream
+  _updateCurrentFileBoundaries(ts);
 }
 
 
