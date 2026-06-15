@@ -13,6 +13,10 @@ server:
     enabled: false
     cert: "ssl/cert.pem"   # путь относительно корня проекта
     key:  "ssl/key.pem"
+    # При включённом HTTPS: автоматически поднимает HTTP-сервер на порту ниже,
+    # который перенаправляет все запросы на HTTPS (301 redirect).
+    # Установите 0 или удалите ключ, чтобы отключить редирект.
+    http_redirect_port: 80
 
 # How often to poll SMB shares for new/deleted files (seconds)
 watcher:

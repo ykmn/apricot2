@@ -102,9 +102,10 @@ port     = int(server.get("port", 8765))
 
 # ── SSL ───────────────────────────────────────────────────────────────────────
 ssl_cfg      = server.get("ssl") or {}
-ssl_enabled  = bool(ssl_cfg.get("enabled", False))
-ssl_certfile = None
-ssl_keyfile  = None
+ssl_enabled      = bool(ssl_cfg.get("enabled", False))
+ssl_certfile     = None
+ssl_keyfile      = None
+http_redirect_port = int(ssl_cfg.get("http_redirect_port", 80)) if ssl_enabled else None
 
 if ssl_enabled:
     cert = ssl_cfg.get("cert", "ssl/cert.crt")
@@ -150,6 +151,7 @@ if sys.platform in ("linux", "darwin") and port < 1024 and os.getuid() != 0:
         )
         sys.exit(1)
 
+import asyncio
 import signal
 import socket
 import uvicorn
@@ -187,17 +189,66 @@ if sys.platform in ("linux", "darwin") and _port_busy(host, port):
         print(f"[server] ОШИБКА: порт {port} всё ещё занят после SIGTERM.", file=sys.stderr)
         sys.exit(1)
 
-if __name__ == "__main__":
-    print(f"Starting Абрикос 2 on {protocol}://{host}:{port}")
-    uvicorn.run(
+def _make_redirect_app(target_host: str, target_port: int) -> object:
+    """Minimal ASGI app: redirect every HTTP request to HTTPS."""
+    port_suffix = "" if target_port == 443 else f":{target_port}"
+
+    async def app(scope, receive, send):
+        if scope["type"] != "http":
+            return
+        host_header = target_host
+        for name, value in scope.get("headers", []):
+            if name == b"host":
+                # Strip any existing port from the Host header
+                host_header = value.decode().split(":")[0]
+                break
+        path = scope.get("path", "/")
+        qs   = scope.get("query_string", b"").decode()
+        location = f"https://{host_header}{port_suffix}{path}" + (f"?{qs}" if qs else "")
+        await send({
+            "type":    "http.response.start",
+            "status":  301,
+            "headers": [(b"location", location.encode()), (b"content-length", b"0")],
+        })
+        await send({"type": "http.response.body", "body": b""})
+
+    return app
+
+
+async def _run_servers() -> None:
+    main_cfg = uvicorn.Config(
         "app.main:app",
         host=host,
         port=port,
         reload=False,
-        # Uvicorn's own access log is redundant — we have our own middleware.
-        # Set to WARNING to keep only startup/error messages from uvicorn itself.
         log_level="warning",
         access_log=False,
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
     )
+    servers = [uvicorn.Server(main_cfg)]
+
+    if http_redirect_port is not None:
+        # Check / clear port before starting redirect server
+        if sys.platform in ("linux", "darwin") and _port_busy(host, http_redirect_port):
+            print(f"[server] Порт {http_redirect_port} занят — завершаю предыдущий процесс...")
+            _kill_port(http_redirect_port)
+            import time; time.sleep(1)
+
+        redir_cfg = uvicorn.Config(
+            _make_redirect_app(host, port),
+            host=host,
+            port=http_redirect_port,
+            reload=False,
+            log_level="warning",
+            access_log=False,
+        )
+        servers.append(uvicorn.Server(redir_cfg))
+        print(f"[server] HTTP→HTTPS редирект: http://{host}:{http_redirect_port} → {protocol}://{host}:{port}")
+
+    await asyncio.gather(*[s.serve() for s in servers])
+
+
+if __name__ == "__main__":
+    print(f"Starting Абрикос 2 on {protocol}://{host}:{port}")
+    asyncio.run(_run_servers())
