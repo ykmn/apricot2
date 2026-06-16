@@ -6,14 +6,16 @@
 #
 # Хранение пароля:
 #   password_pbkdf2: "<хэш>"  — рекомендуется; PBKDF2-SHA256, 600 000 итераций (OWASP 2023).
-#                                Хэш генерируется через: python tools/hash_password.py
+#                               Хэш генерируется через: python tools/hash_password.py
 #   password: "<текст>"       — открытый текст (только для совместимости, не рекомендуется).
 
 users:
   - username: admin
     password: adminPassword
+    password_pbkdf2: "$pbkdf2$sha256$600000$HK7+w4K2x3Kot+FH914Yk43AduOqS1Og7YcLXLbXujg=$AKopE9iMDgKXXmXjagSvXMEXI9cvAxfVXnoFbhmfYts="
     is_admin: true
 
   - username: user
-    password: user
+#    password: user
+    password_pbkdf2: "$pbkdf2$sha256$600000$qcixE8Ix8R0MZ1IZIDNIIjXGg+63cYImb4M6vIip93E=$NvSwG/GF3OSYHQnVDCtNML1PFEGlW4Zb1cQlXHtHKDY="
     is_admin: false
