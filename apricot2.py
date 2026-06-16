@@ -246,7 +246,28 @@ async def _run_servers() -> None:
         servers.append(uvicorn.Server(redir_cfg))
         print(f"[server] HTTP→HTTPS редирект: http://{host}:{http_redirect_port} → {protocol}://{host}:{port}")
 
-    await asyncio.gather(*[s.serve() for s in servers])
+    if len(servers) == 1:
+        await servers[0].serve()
+        return
+
+    # Run main server and redirect server as independent tasks.
+    # If the redirect server fails (e.g. authbind not configured for port 80),
+    # log the error but keep the main server running.
+    async def _serve_redirect(srv: uvicorn.Server) -> None:
+        try:
+            await srv.serve()
+        except (SystemExit, Exception) as exc:
+            code = exc.code if isinstance(exc, SystemExit) else exc
+            print(
+                f"[server] HTTP-редирект не запустился (порт {http_redirect_port}): {code}. "
+                f"Основной сервер продолжает работу.",
+                file=sys.stderr,
+            )
+
+    await asyncio.gather(
+        servers[0].serve(),
+        *[_serve_redirect(s) for s in servers[1:]],
+    )
 
 
 if __name__ == "__main__":

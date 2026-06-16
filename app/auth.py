@@ -431,31 +431,48 @@ def _get_primary_group_dn(conn, base_dn: str, primary_group_id) -> Optional[str]
     return None
 
 
+def _reconnect(conn) -> bool:
+    """Try to reopen a dead ldap3 connection. Returns True on success."""
+    try:
+        conn.open()
+        return conn.bind()
+    except Exception:
+        return False
+
+
 def _get_transitive_groups(conn, base_dn: str, user_dn: str) -> Optional[list[str]]:
     """Return DNs of all groups the user belongs to, including nested groups.
 
     Uses the LDAP_MATCHING_RULE_IN_CHAIN OID (1.2.840.113556.1.4.1941),
     which is an Active Directory extension that resolves group membership
     transitively — i.e. it follows nested group chains at the server side.
-    Returns None on failure (timeout, socket error) so the caller can fall
-    back to the direct memberOf attribute. Returns [] legitimately when the
-    user has no group memberships.
+    On timeout/socket error tries to reconnect once before giving up.
+    Returns None on failure so the caller can fall back to direct memberOf.
+    Returns [] legitimately when the user has no group memberships.
     """
     import ldap3  # noqa: PLC0415
-    try:
-        safe_dn = ldap3.utils.conv.escape_filter_chars(user_dn)
-        conn.search(
-            base_dn,
-            f"(member:1.2.840.113556.1.4.1941:={safe_dn})",
-            search_scope=ldap3.SUBTREE,
-            attributes=["distinguishedName"],
-        )
-        groups = [str(e.distinguishedName) for e in conn.entries]
-        log.debug("Transitive groups for %s (%d): %s", user_dn, len(groups), groups)
-        return groups
-    except Exception as exc:
-        log.warning("Transitive group search failed for %s: %s", user_dn, exc)
-        return None
+    safe_dn = ldap3.utils.conv.escape_filter_chars(user_dn)
+    for attempt in range(2):
+        try:
+            conn.search(
+                base_dn,
+                f"(member:1.2.840.113556.1.4.1941:={safe_dn})",
+                search_scope=ldap3.SUBTREE,
+                attributes=["distinguishedName"],
+            )
+            groups = [str(e.distinguishedName) for e in conn.entries]
+            log.debug("Transitive groups for %s (%d): %s", user_dn, len(groups), groups)
+            return groups
+        except Exception as exc:
+            if attempt == 0:
+                log.debug("Transitive group search failed for %s: %s — reconnecting", user_dn, exc)
+                if not _reconnect(conn):
+                    log.warning("Transitive group search failed for %s: %s", user_dn, exc)
+                    return None
+            else:
+                log.warning("Transitive group search failed for %s: %s", user_dn, exc)
+                return None
+    return None  # unreachable, satisfies type checker
 
 
 def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict:
@@ -542,6 +559,7 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
         if member_of is None:
             log.warning("Falling back to direct memberOf for %s (%d groups)", short_name, len(direct_groups))
             member_of = direct_groups
+            _reconnect(svc_conn)
         primary_dn       = _get_primary_group_dn(svc_conn, base_dn, primary_group_id)
         if primary_dn:
             member_of.append(primary_dn)
@@ -616,6 +634,7 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
             if transitive is None:
                 log.warning("Falling back to direct memberOf for %s (%d groups)", short_name, len(direct_groups))
                 member_of = direct_groups
+                _reconnect(conn)
             else:
                 member_of = transitive
             primary_dn       = _get_primary_group_dn(conn, base_dn, primary_group_id)
