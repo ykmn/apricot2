@@ -85,6 +85,9 @@ def _current_user() -> str:
 
 _SMB_VERSIONS = ("3.0", "2.1", "2.0", "1.0")
 
+# Resolved once at import time so sudo commands and sudoers hint use the same path.
+_CIFS_BIN = shutil.which("mount.cifs") or "/sbin/mount.cifs"
+
 
 def _umount_lazy(mount_point: Path) -> None:
     """Lazy-unmount a stale/busy mountpoint (best-effort)."""
@@ -109,7 +112,7 @@ def _mount_linux(smb: SMBConfig, mount_point: Path) -> str:
         <user> ALL=(root) NOPASSWD: /sbin/mount.cifs
     Falls back through SMB versions 3.0→2.1→2.0→1.0 on error(95).
     """
-    cifs_bin = shutil.which("mount.cifs") or "/sbin/mount.cifs"
+    cifs_bin = _CIFS_BIN
     unc = f"//{smb.host}/{smb.share}"
 
     # Determine security mode.
@@ -265,11 +268,10 @@ def mount_all(smb_configs: list[SMBConfig]) -> list[MountResult]:
 
     # Print sudoers hint once at the end if any mount failed due to permissions
     if needs_sudoers and IS_LINUX:
-        cifs_bin = shutil.which("mount.cifs") or "/sbin/mount.cifs"
         user = _current_user()
         print(
             f"[smb_mount] Для авто-монтирования добавьте в /etc/sudoers (visudo):\n"
-            f"[smb_mount]   {user} ALL=(root) NOPASSWD: {cifs_bin}",
+            f"[smb_mount]   {user} ALL=(root) NOPASSWD: {_CIFS_BIN}",
             file=sys.stderr,
         )
 
