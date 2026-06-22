@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 
 from . import auth as _auth
+from . import ui_state as _ui_state
 
 from . import app_logger as _app_logger
 from .app_logger import get_logger
@@ -30,7 +31,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.057"
+VERSION = "1.2.058"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -431,6 +432,42 @@ async def api_me(request: Request) -> dict:
         "auth_type": session["auth_type"],
         "domain":    session.get("domain", ""),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# UI state (per-user persistence)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _current_username(request: Request) -> str | None:
+    """Return username from session cookie, or None when auth is disabled."""
+    if not _auth.auth_required():
+        return None
+    token = request.cookies.get(_auth.COOKIE_NAME)
+    session = _auth.get_session(token) if token else None
+    return session["username"] if session else None
+
+
+@app.get("/api/ui-state")
+async def get_ui_state(request: Request) -> dict:
+    return _ui_state.load(_current_username(request))
+
+
+@app.put("/api/ui-state")
+async def put_ui_state(request: Request) -> dict:
+    body = await request.json()
+    state: dict = {}
+    if "channel_id" in body:
+        state["channel_id"] = str(body["channel_id"]) if body["channel_id"] else None
+    if "timeline_time" in body:
+        state["timeline_time"] = float(body["timeline_time"]) if body["timeline_time"] is not None else None
+    if "sel_start" in body:
+        state["sel_start"] = float(body["sel_start"]) if body["sel_start"] is not None else None
+    if "sel_end" in body:
+        state["sel_end"] = float(body["sel_end"]) if body["sel_end"] is not None else None
+    if "log_items" in body:
+        state["log_items"] = list(body["log_items"]) if body["log_items"] is not None else []
+    _ui_state.save(_current_username(request), state)
+    return {"ok": True}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
