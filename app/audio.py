@@ -11,6 +11,7 @@ import asyncio
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from datetime import datetime
@@ -25,6 +26,18 @@ from .models import AudioFile, ChannelConfig
 log = get_logger("audio")
 
 FFMPEG = os.environ.get("FFMPEG_PATH", "ffmpeg")
+
+
+def _is_local_path_usable(local_path: str) -> bool:
+    """Return True if local_path is actually accessible on the current OS.
+
+    A Windows UNC path (starts with \\) is unusable on Linux/macOS even if
+    the channel config has it set — in that case we must fall back to SMB.
+    """
+    if sys.platform == "win32":
+        return True
+    # On POSIX: backslash-style UNC paths (\\server\share) are not filesystem paths
+    return not local_path.startswith("\\\\")
 
 
 def _ffmpeg_ok() -> bool:
@@ -317,7 +330,15 @@ async def stream_audio(
     # corresponding to the start trim, so the unneeded prefix is never fetched.
     # This lets the browser receive the first audio chunk almost immediately
     # instead of waiting for the whole file to download.
-    if channel.smb is not None and not channel.local_path:
+    #
+    # Also use pipe mode when local_path is a Windows UNC path (\\server\share)
+    # running on a non-Windows OS — such paths are not usable as local filesystem
+    # paths and the SMB protocol must be used instead.
+    _use_pipe = (
+        channel.smb is not None
+        and (not channel.local_path or not _is_local_path_usable(channel.local_path))
+    )
+    if _use_pipe:
         first_chunk = True
         for i, af in enumerate(files):
             is_first = (i == 0)
