@@ -95,17 +95,54 @@ async def _pipe_smb_segment(
     ss       — seconds to skip from the beginning of this file
     duration — seconds to output (None = play until EOF)
 
-    For known bitrates the SMB file handle is seeked directly to the approximate
-    byte offset, so the prefix before ss is never transmitted over the network.
-    ffmpeg decodes from the seeked position; sub-frame alignment is handled
-    automatically by the decoder.
+    Opens the file and validates the byte offset against the actual file size
+    before starting ffmpeg.  If the estimated offset would overshoot EOF
+    (e.g. old file recorded at a different bitrate), falls back to ffmpeg -ss
+    so ffmpeg decodes-and-discards the prefix instead — slower but always correct.
     """
     rel = _rel_from_af(af, channel)
-    byte_offset = _byte_offset_for_seek(ss, channel)
+    loop = asyncio.get_event_loop()
 
-    # When byte seek covered ss, ffmpeg doesn't need an additional -ss.
-    # When bitrate is unknown (byte_offset==0 but ss>0), pass ss to ffmpeg
-    # so it decodes-and-discards the prefix (slower, but still correct).
+    # Open the SMB file and determine the actual seek position.
+    # We check the file size before seeking so a stale channel.bitrate value
+    # (auto-detected from recent files) cannot cause the offset to overshoot EOF
+    # on older files recorded at a different bitrate — which would make fh.read()
+    # return empty bytes immediately and cause ffmpeg to produce no output.
+    est_offset = _byte_offset_for_seek(ss, channel)
+
+    def _open_file():
+        fh = smb.open_file(None, channel.smb, rel)
+        if est_offset <= 0:
+            return fh, 0
+        try:
+            fh.seek(0, 2)                   # move to end → current pos = file size
+            file_size = fh.tell()
+            if est_offset < file_size:
+                fh.seek(est_offset)
+                return fh, est_offset
+            # Offset overshoots: old file with different bitrate
+            log.debug(
+                "pipe seek %d >= file_size %d for %s — using ffmpeg -ss fallback",
+                est_offset, file_size, rel,
+            )
+            fh.seek(0)
+            return fh, 0
+        except Exception:
+            # seek(0,2) failed on this SMB implementation — just start from 0
+            try:
+                fh.seek(0)
+            except Exception:
+                pass
+            return fh, 0
+
+    try:
+        fh, byte_offset = await loop.run_in_executor(None, _open_file)
+    except Exception as exc:
+        log.error("pipe open error %s: %s", rel, exc)
+        return
+
+    # If byte seek covered ss, no additional ffmpeg -ss needed.
+    # If we fell back to offset=0, pass ss to ffmpeg for internal decode-seek.
     fine_ss = 0.0 if (byte_offset > 0 or ss <= 0) else ss
 
     ext = channel.file_extension.lower()
@@ -138,29 +175,18 @@ async def _pipe_smb_segment(
         stderr=asyncio.subprocess.PIPE,
     )
 
-    loop = asyncio.get_event_loop()
-
     async def feed_stdin() -> None:
         try:
-            def _open_and_seek():
-                fh = smb.open_file(None, channel.smb, rel)
-                if byte_offset > 0:
-                    fh.seek(byte_offset)
-                return fh
-
-            fh = await loop.run_in_executor(None, _open_and_seek)
-            try:
-                while True:
-                    chunk = await loop.run_in_executor(None, fh.read, 65536)
-                    if not chunk:
-                        break
-                    proc.stdin.write(chunk)
-                    await proc.stdin.drain()
-            finally:
-                await loop.run_in_executor(None, fh.close)
+            while True:
+                chunk = await loop.run_in_executor(None, fh.read, 65536)
+                if not chunk:
+                    break
+                proc.stdin.write(chunk)
+                await proc.stdin.drain()
         except Exception as exc:
             log.error("pipe feed error %s: %s", rel, exc)
         finally:
+            await loop.run_in_executor(None, fh.close)
             try:
                 proc.stdin.close()
             except Exception:
