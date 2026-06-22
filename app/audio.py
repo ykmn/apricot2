@@ -180,8 +180,8 @@ async def _pipe_smb_segment(
             rel, est_offset, file_size, ss,
         )
 
-    log.info(
-        "pipe segment open: %s  size=%d  byte_off=%d  ss=%.1f  dur=%s",
+    log.debug(
+        "pipe segment: %s  size=%d  byte_off=%d  ss=%.1f  dur=%s",
         rel, file_size, byte_offset, ss,
         f"{duration:.1f}" if duration is not None else "EOF",
     )
@@ -347,7 +347,7 @@ async def stream_audio(
             outpoint = (end - af.start_dt).total_seconds() if is_last else None
             duration = (outpoint - ss) if outpoint is not None else None
 
-            log.info(
+            log.debug(
                 "stream_audio pipe [%d/%d] %s ss=%.1f dur=%s byte_off=%d",
                 i + 1, len(files), af.rel_path, ss,
                 f"{duration:.1f}" if duration is not None else "EOF",
@@ -413,7 +413,7 @@ async def stream_audio(
                         cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
                 cmd += ["pipe:1"]
 
-                log.info(
+                log.debug(
                     "stream_audio stage [%d/%d] %s ss=%.1f out=%s",
                     i + 1, len(files), local_path, ss,
                     f"{outpoint:.1f}" if outpoint is not None else "EOF",
