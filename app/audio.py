@@ -1,6 +1,9 @@
 """
 Audio streaming and export via ffmpeg.
 Handles multi-file concatenation for ranges that span several audio files.
+
+SMB streaming uses pipe mode: files are opened as SMB streams, seeked to the
+correct byte offset, and fed to ffmpeg stdin — no full-file download required.
 """
 from __future__ import annotations
 
@@ -45,6 +48,140 @@ def _native_format(channel: ChannelConfig) -> str:
     return "mp3"
 
 
+def _parse_bitrate_bps(bitrate_str: str | None) -> int:
+    """Parse '192k' → 192000. Returns 0 if unknown."""
+    if not bitrate_str:
+        return 0
+    s = bitrate_str.lower().strip()
+    try:
+        return int(float(s.rstrip("k")) * (1000 if s.endswith("k") else 1))
+    except ValueError:
+        return 0
+
+
+def _byte_offset_for_seek(ss: float, channel: ChannelConfig) -> int:
+    """Approximate byte offset for seeking ss seconds into a CBR audio file.
+
+    For CBR MP3/AAC: offset = bitrate_bps/8 * ss
+    For WAV: offset = 44-byte header + PCM bytes
+
+    Returns 0 when unknown — safe fallback, ffmpeg will decode from stream start.
+    The SMB seek() translates to a direct SMB READ at that offset, so we skip
+    transmitting the unneeded prefix entirely.
+    """
+    if ss <= 0:
+        return 0
+    ext = channel.file_extension.lower()
+    if ext == "wav":
+        return 44 + int(channel.sample_rate * 2 * 2 * ss)   # 16-bit stereo PCM
+    bps = _parse_bitrate_bps(channel.bitrate)
+    if bps > 0:
+        return int(bps / 8 * ss)
+    return 0
+
+
+async def _pipe_smb_segment(
+    af: AudioFile,
+    channel: ChannelConfig,
+    ss: float,
+    duration: float | None,
+    copy_mode: bool,
+    out_format: str,
+    bitrate: str,
+    sample_rate: int | None,
+) -> AsyncGenerator[bytes, None]:
+    """Stream one SMB audio file to ffmpeg via stdin pipe, without a temp copy.
+
+    ss       — seconds to skip from the beginning of this file
+    duration — seconds to output (None = play until EOF)
+
+    For known bitrates the SMB file handle is seeked directly to the approximate
+    byte offset, so the prefix before ss is never transmitted over the network.
+    ffmpeg decodes from the seeked position; sub-frame alignment is handled
+    automatically by the decoder.
+    """
+    rel = _rel_from_af(af, channel)
+    byte_offset = _byte_offset_for_seek(ss, channel)
+
+    # When byte seek covered ss, ffmpeg doesn't need an additional -ss.
+    # When bitrate is unknown (byte_offset==0 but ss>0), pass ss to ffmpeg
+    # so it decodes-and-discards the prefix (slower, but still correct).
+    fine_ss = 0.0 if (byte_offset > 0 or ss <= 0) else ss
+
+    ext = channel.file_extension.lower()
+    in_fmt = {"wav": "wav", "aac": "adts"}.get(ext, "mp3")
+
+    cmd = [FFMPEG, "-y", "-f", in_fmt]
+    if fine_ss > 0:
+        cmd += ["-ss", f"{fine_ss:.3f}"]
+    cmd += ["-i", "pipe:0", "-vn"]
+    if duration is not None:
+        cmd += ["-t", f"{duration:.3f}"]
+
+    if copy_mode:
+        cmd += ["-c", "copy", "-f", _native_format(channel)]
+    else:
+        if sample_rate:
+            cmd += ["-ar", str(sample_rate)]
+        if out_format == "wav":
+            cmd += ["-acodec", "pcm_s16le", "-f", "wav"]
+        elif out_format == "aac":
+            cmd += ["-acodec", "aac", "-b:a", bitrate, "-f", "adts"]
+        else:
+            cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
+    cmd += ["pipe:1"]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    loop = asyncio.get_event_loop()
+
+    async def feed_stdin() -> None:
+        try:
+            def _open_and_seek():
+                fh = smb.open_file(None, channel.smb, rel)
+                if byte_offset > 0:
+                    fh.seek(byte_offset)
+                return fh
+
+            fh = await loop.run_in_executor(None, _open_and_seek)
+            try:
+                while True:
+                    chunk = await loop.run_in_executor(None, fh.read, 65536)
+                    if not chunk:
+                        break
+                    proc.stdin.write(chunk)
+                    await proc.stdin.drain()
+            finally:
+                await loop.run_in_executor(None, fh.close)
+        except Exception as exc:
+            log.error("pipe feed error %s: %s", rel, exc)
+        finally:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+
+    feed_task = asyncio.create_task(feed_stdin())
+    try:
+        while True:
+            chunk = await proc.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        feed_task.cancel()
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+
+
 async def stream_audio(
     channel: ChannelConfig,
     start: datetime,
@@ -57,10 +194,13 @@ async def stream_audio(
     """
     Yield audio bytes for the requested time range in the requested format.
 
-    All SMB files are downloaded in parallel as background tasks.
-    ffmpeg starts on each file as soon as it is ready — without waiting
-    for the rest — so the browser receives the first audio chunk as soon
-    as the first file arrives.
+    For SMB channels: each file is opened as a stream and seeked to the byte
+    offset matching the start trim; no full-file download is required.  ffmpeg
+    starts processing immediately and the browser receives the first audio chunk
+    within seconds.
+
+    For local/mounted channels: files are staged to a temp dir in parallel
+    (pre-fetching file N+1 while ffmpeg processes file N).
     """
     idx = file_index.get_index(channel.id)
     if idx is None:
@@ -82,8 +222,43 @@ async def stream_audio(
     if not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
         copy_mode = True
 
+    # ── SMB pipe mode ─────────────────────────────────────────────────────────
+    # For pure SMB channels (no local mount), stream each file directly from the
+    # share into ffmpeg stdin.  The SMB file handle is seeked to the byte offset
+    # corresponding to the start trim, so the unneeded prefix is never fetched.
+    # This lets the browser receive the first audio chunk almost immediately
+    # instead of waiting for the whole file to download.
+    if channel.smb is not None and not channel.local_path:
+        first_chunk = True
+        for i, af in enumerate(files):
+            is_first = (i == 0)
+            is_last  = (i == len(files) - 1)
+            ss       = max(0.0, (start - af.start_dt).total_seconds()) if is_first else 0.0
+            outpoint = (end - af.start_dt).total_seconds() if is_last else None
+            duration = (outpoint - ss) if outpoint is not None else None
+
+            log.debug(
+                "stream_audio pipe [%d/%d] %s ss=%.1f dur=%s byte_off=%d",
+                i + 1, len(files), af.rel_path, ss,
+                f"{duration:.1f}" if duration is not None else "EOF",
+                _byte_offset_for_seek(ss, channel),
+            )
+
+            async for chunk in _pipe_smb_segment(
+                af, channel, ss, duration, copy_mode, out_format, bitrate, sample_rate
+            ):
+                if first_chunk:
+                    log.info(
+                        "stream_audio first_chunk (pipe): channel=%s in %.2fs",
+                        channel.id, time.monotonic() - t0,
+                    )
+                    first_chunk = False
+                yield chunk
+        return
+
+    # ── Local / mounted path ──────────────────────────────────────────────────
+    # Launch all downloads in parallel immediately — do not await yet.
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Launch all downloads in parallel immediately — do not await yet.
         dl_tasks = [
             asyncio.create_task(_stage_one(i, af, len(files), tmpdir, channel))
             for i, af in enumerate(files)

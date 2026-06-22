@@ -13,7 +13,7 @@ let playAnimFrame   = null;
 let _tlAnimUpdate   = false;   // true only during animation-frame setTime calls
 let _seekPending    = false;   // true while user scrolled and audio hasn't started yet
 
-const _LOG_KEY = 'apricot-logitems';
+const _LOG_KEY = 'apricot-logitems';  // legacy localStorage key — used only for migration
 
 const audio = document.getElementById('audio-player');
 
@@ -77,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
     onSelChange: (s, e) => {
       updateSelLabel(s, e);
+      _scheduleUiStateSave();
     },
   });
 
@@ -84,8 +85,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   buildChannelDropdown();
   initChannelSearch();
   initTransport();
-  _loadLogItems();
+
+  // Load persisted UI state from server; migrate localStorage if first time
+  const _uiState = await _fetchUiState();
+  if (_uiState.log_items && _uiState.log_items.length > 0) {
+    logItems = _uiState.log_items;
+    // Clean up legacy localStorage entry if it still exists
+    try { localStorage.removeItem(_LOG_KEY); } catch(_) {}
+  } else {
+    // Migration: first open after update — pull from localStorage → server
+    try {
+      const raw = localStorage.getItem(_LOG_KEY);
+      if (raw) {
+        logItems = JSON.parse(raw);
+        localStorage.removeItem(_LOG_KEY);
+        _scheduleUiStateSave();  // persist migrated data to server
+      }
+    } catch(_) {}
+  }
+
   initLogList();
+  renderLogList();
   initExportModal();
   initClockControls();
   initMobClock();
@@ -96,17 +116,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   connectWebSocket();
   loadVersion();
 
-  // Restore channel and time from URL params (?ch=id&t=ts)
+  // Restore channel and time: URL params take priority over saved state
   const _urlParams = new URLSearchParams(location.search);
   const _urlCh = _urlParams.get('ch');
   const _urlTs = _urlParams.get('t');
-  if (_urlCh) {
+
+  const _restoreCh = _urlCh || _uiState.channel_id;
+  if (_restoreCh) {
     for (const st of stations) {
-      const ch = st.channels.find(c => c.id === _urlCh);
+      const ch = st.channels.find(c => c.id === _restoreCh);
       if (ch) { selectChannel(ch, st); break; }
     }
   }
-  Timeline.setTime(_urlTs ? parseFloat(_urlTs) : Date.now() / 1000);
+
+  const _restoreTs = _urlTs ? parseFloat(_urlTs) : (_uiState.timeline_time || Date.now() / 1000);
+  Timeline.setTime(_restoreTs);
+
+  // Restore selection markers
+  if (_uiState.sel_start != null) Timeline.setSelStart(_uiState.sel_start);
+  if (_uiState.sel_end   != null) Timeline.setSelEnd(_uiState.sel_end);
+
   _updateBrandLink();
 
   // Copy URL button
@@ -312,6 +341,7 @@ function selectChannel(ch, st) {
   Timeline.setChannel(ch.id);
   loadPlaylist();
   _updateBrandLink();
+  _scheduleUiStateSave();
 
   if (wasPlaying) startPlay();
 }
@@ -634,17 +664,46 @@ function _secToDuration(s) {
   return `${m}:${_fmt2(sec)}`;
 }
 
-// ── Log-list persistence ───────────────────────────────────────────────────
-function _saveLogItems() {
-  try { localStorage.setItem(_LOG_KEY, JSON.stringify(logItems)); } catch(e) {}
+// ── UI state persistence (server-side, per-user) ──────────────────────────
+let _uiSaveTimer = null;
+
+function _scheduleUiStateSave() {
+  clearTimeout(_uiSaveTimer);
+  _uiSaveTimer = setTimeout(_doSaveUiState, 1500);
 }
 
-function _loadLogItems() {
+async function _doSaveUiState() {
+  const sel = Timeline.getSelection();
   try {
-    const raw = localStorage.getItem(_LOG_KEY);
-    if (raw) logItems = JSON.parse(raw);
-  } catch(e) {}
-  renderLogList(); // всегда рендерим: при пустом списке показывает подсказку
+    await fetch('/api/ui-state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel_id:    currentChannel?.id ?? null,
+        timeline_time: Timeline.getCenterTime(),
+        sel_start:     sel.start,
+        sel_end:       sel.end,
+        log_items:     logItems,
+      }),
+    });
+  } catch (_) { /* non-critical */ }
+}
+
+async function _fetchUiState() {
+  try { return await api('/api/ui-state'); } catch(_) { return {}; }
+}
+
+// Save immediately on tab hide/close so timeline position is not lost
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    clearTimeout(_uiSaveTimer);
+    _doSaveUiState();
+  }
+});
+
+// ── Log-list persistence ───────────────────────────────────────────────────
+function _saveLogItems() {
+  _scheduleUiStateSave();
 }
 
 // ── Log-list ───────────────────────────────────────────────────────────────
