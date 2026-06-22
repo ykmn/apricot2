@@ -166,7 +166,22 @@ async def _pipe_smb_segment(
             except Exception:
                 pass
 
-    feed_task = asyncio.create_task(feed_stdin())
+    async def drain_stderr() -> None:
+        # ffmpeg stderr MUST be continuously read; if the OS pipe buffer (~64 KB)
+        # fills up, ffmpeg blocks on the write, which in turn prevents it from
+        # reading stdin or writing stdout — causing a deadlock.
+        try:
+            assert proc.stderr is not None
+            while True:
+                line = await proc.stderr.readline()
+                if not line:
+                    break
+                log.debug("ffmpeg stderr: %s", line.decode("utf-8", errors="replace").rstrip())
+        except Exception:
+            pass
+
+    feed_task   = asyncio.create_task(feed_stdin())
+    stderr_task = asyncio.create_task(drain_stderr())
     try:
         while True:
             chunk = await proc.stdout.read(65536)
@@ -175,6 +190,7 @@ async def _pipe_smb_segment(
             yield chunk
     finally:
         feed_task.cancel()
+        stderr_task.cancel()
         try:
             proc.kill()
         except ProcessLookupError:
