@@ -80,6 +80,23 @@ def _byte_offset_for_seek(ss: float, channel: ChannelConfig) -> int:
     return 0
 
 
+async def _drain_stderr_local(proc: asyncio.subprocess.Process, label: str) -> None:
+    """Drain ffmpeg stderr for staging-path invocations to prevent pipe buffer deadlock."""
+    try:
+        assert proc.stderr is not None
+        while True:
+            line = await proc.stderr.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").rstrip()
+            if any(kw in text for kw in ("Error", "error", "Invalid", "invalid", "Could not", "No such")):
+                log.info("ffmpeg stage [%s]: %s", label, text)
+            else:
+                log.debug("ffmpeg stage [%s]: %s", label, text)
+    except Exception:
+        pass
+
+
 async def _pipe_smb_segment(
     af: AudioFile,
     channel: ChannelConfig,
@@ -375,6 +392,12 @@ async def stream_audio(
                         cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
                 cmd += ["pipe:1"]
 
+                log.info(
+                    "stream_audio stage [%d/%d] %s ss=%.1f out=%s",
+                    i + 1, len(files), local_path, ss,
+                    f"{outpoint:.1f}" if outpoint is not None else "EOF",
+                )
+
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
@@ -382,22 +405,35 @@ async def stream_audio(
                 )
                 if proc.stdout is None:
                     raise RuntimeError("ffmpeg subprocess stdout is None")
+
+                seg_stderr = asyncio.create_task(
+                    _drain_stderr_local(proc, local_path)
+                )
+                seg_chunks = 0
                 try:
                     while True:
                         chunk = await proc.stdout.read(65536)
                         if not chunk:
                             break
+                        seg_chunks += 1
                         if first_chunk:
                             log.info("stream_audio first_chunk: channel=%s in %.2fs total",
                                      channel.id, time.monotonic() - t0)
                             first_chunk = False
                         yield chunk
                 finally:
+                    seg_stderr.cancel()
                     try:
                         proc.kill()
                     except ProcessLookupError:
                         pass
-                    await proc.wait()
+                    rc = await proc.wait()
+                    if seg_chunks == 0:
+                        log.warning(
+                            "stage segment produced no output: %s  rc=%d  ss=%.1f  out=%s",
+                            local_path, rc, ss,
+                            f"{outpoint:.1f}" if outpoint is not None else "EOF",
+                        )
 
         finally:
             # Cancel any downloads still in progress (e.g. client disconnected).
