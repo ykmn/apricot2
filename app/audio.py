@@ -561,7 +561,17 @@ async def _stage_one(
     Returns the local filesystem path on success, None on failure.
     """
     if not af.is_smb or channel.local_path:
-        return af.path
+        # Guard against stale disk-cache entries that have Windows UNC paths
+        # (e.g. \\server\share\...) on a Linux/macOS server.  Such entries were
+        # written when the server last ran on Windows; the local_path in the
+        # channel config is now a proper POSIX mount, but the cached af.path
+        # still carries the old Windows UNC style.  Fall through to SMB download
+        # when channel.smb is available and the stored path is unusable here.
+        if not channel.smb or _is_local_path_usable(af.path):
+            return af.path
+        log.debug(
+            "_stage_one: cached path not usable on this OS (%s), falling back to SMB", af.path
+        )
 
     loop = asyncio.get_running_loop()
     local_copy = str(Path(tmpdir) / f"seg_{i:04d}.{channel.file_extension}")
