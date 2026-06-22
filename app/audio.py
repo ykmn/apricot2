@@ -100,8 +100,11 @@ async def _pipe_smb_segment(
     (e.g. old file recorded at a different bitrate), falls back to ffmpeg -ss
     so ffmpeg decodes-and-discards the prefix instead — slower but always correct.
     """
-    rel = _rel_from_af(af, channel)
-    loop = asyncio.get_event_loop()
+    # Use af.rel_path (the path found during scanning) rather than reconstructing
+    # it from the channel format templates — the two can diverge if the channel
+    # config was updated after old files were indexed.
+    rel = af.rel_path
+    loop = asyncio.get_running_loop()
 
     # Open the SMB file and determine the actual seek position.
     # We check the file size before seeking so a stale channel.bitrate value
@@ -113,33 +116,45 @@ async def _pipe_smb_segment(
     def _open_file():
         fh = smb.open_file(None, channel.smb, rel)
         if est_offset <= 0:
-            return fh, 0
+            return fh, 0, -1
         try:
             fh.seek(0, 2)                   # move to end → current pos = file size
             file_size = fh.tell()
             if est_offset < file_size:
                 fh.seek(est_offset)
-                return fh, est_offset
+                return fh, est_offset, file_size
             # Offset overshoots: old file with different bitrate
-            log.debug(
-                "pipe seek %d >= file_size %d for %s — using ffmpeg -ss fallback",
-                est_offset, file_size, rel,
-            )
             fh.seek(0)
-            return fh, 0
+            return fh, 0, file_size
         except Exception:
             # seek(0,2) failed on this SMB implementation — just start from 0
             try:
                 fh.seek(0)
             except Exception:
                 pass
-            return fh, 0
+            return fh, 0, -1
 
     try:
-        fh, byte_offset = await loop.run_in_executor(None, _open_file)
+        fh, byte_offset, file_size = await loop.run_in_executor(None, _open_file)
     except Exception as exc:
         log.error("pipe open error %s: %s", rel, exc)
         return
+
+    if file_size == 0:
+        log.warning("pipe segment skipped — file is empty: %s", rel)
+        return
+
+    if byte_offset == 0 and est_offset > 0:
+        log.info(
+            "pipe seek overshoot for %s: est_offset=%d file_size=%d ss=%.1f — ffmpeg -ss fallback",
+            rel, est_offset, file_size, ss,
+        )
+
+    log.info(
+        "pipe segment open: %s  size=%d  byte_off=%d  ss=%.1f  dur=%s",
+        rel, file_size, byte_offset, ss,
+        f"{duration:.1f}" if duration is not None else "EOF",
+    )
 
     # If byte seek covered ss, no additional ffmpeg -ss needed.
     # If we fell back to offset=0, pass ss to ffmpeg for internal decode-seek.
@@ -202,17 +217,25 @@ async def _pipe_smb_segment(
                 line = await proc.stderr.readline()
                 if not line:
                     break
-                log.debug("ffmpeg stderr: %s", line.decode("utf-8", errors="replace").rstrip())
+                text = line.decode("utf-8", errors="replace").rstrip()
+                # Log actual ffmpeg errors/warnings at INFO so they appear in the console;
+                # progress lines (size=, time=, speed=) are noisy — suppress them.
+                if any(kw in text for kw in ("Error", "error", "Invalid", "invalid", "Could not", "No such")):
+                    log.info("ffmpeg [%s]: %s", rel, text)
+                else:
+                    log.debug("ffmpeg [%s]: %s", rel, text)
         except Exception:
             pass
 
     feed_task   = asyncio.create_task(feed_stdin())
     stderr_task = asyncio.create_task(drain_stderr())
+    chunks_yielded = 0
     try:
         while True:
             chunk = await proc.stdout.read(65536)
             if not chunk:
                 break
+            chunks_yielded += 1
             yield chunk
     finally:
         feed_task.cancel()
@@ -221,7 +244,14 @@ async def _pipe_smb_segment(
             proc.kill()
         except ProcessLookupError:
             pass
-        await proc.wait()
+        rc = await proc.wait()
+        if chunks_yielded == 0:
+            log.warning(
+                "pipe segment produced no output: %s  rc=%d  byte_off=%d  fine_ss=%.1f",
+                rel, rc, byte_offset, fine_ss,
+            )
+        else:
+            log.debug("pipe segment done: %s  chunks=%d  rc=%d", rel, chunks_yielded, rc)
 
 
 async def stream_audio(
@@ -279,7 +309,7 @@ async def stream_audio(
             outpoint = (end - af.start_dt).total_seconds() if is_last else None
             duration = (outpoint - ss) if outpoint is not None else None
 
-            log.debug(
+            log.info(
                 "stream_audio pipe [%d/%d] %s ss=%.1f dur=%s byte_off=%d",
                 i + 1, len(files), af.rel_path, ss,
                 f"{duration:.1f}" if duration is not None else "EOF",
@@ -476,9 +506,9 @@ async def _stage_one(
     if not af.is_smb or channel.local_path:
         return af.path
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     local_copy = str(Path(tmpdir) / f"seg_{i:04d}.{channel.file_extension}")
-    rel = _rel_from_af(af, channel)
+    rel = af.rel_path
     t_dl = time.monotonic()
     try:
         data = await loop.run_in_executor(
