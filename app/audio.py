@@ -110,6 +110,86 @@ async def _drain_stderr_local(proc: asyncio.subprocess.Process, label: str) -> N
         pass
 
 
+async def _direct_smb_segment(
+    af: AudioFile,
+    channel: ChannelConfig,
+    ss: float,
+    duration: float | None,
+) -> AsyncGenerator[bytes, None]:
+    """Stream SMB file bytes directly to the caller — no ffmpeg involved.
+
+    Used for native-format copy mode (MP3→MP3, AAC→AAC).  Both formats are
+    self-framing, so raw bytes are playable by browsers without any container
+    header.  Start/end trimming is approximate to the nearest CBR frame; for
+    audio monitoring this is indistinguishable from precise trimming.
+
+    Eliminates ffmpeg process startup (~100 ms), pipe setup, and the
+    analyzeduration probe delay, giving near-instant first audio.
+    """
+    rel = af.rel_path
+    loop = asyncio.get_running_loop()
+    est_offset = _byte_offset_for_seek(ss, channel)
+
+    # Bytes to send: bitrate * duration / 8, or None = read to EOF.
+    byte_count: int | None = None
+    if duration is not None:
+        ext = channel.file_extension.lower()
+        if ext == "wav":
+            byte_count = int(channel.sample_rate * 2 * 2 * duration)
+        else:
+            bps = _parse_bitrate_bps(channel.bitrate)
+            if bps > 0:
+                byte_count = int(bps / 8 * duration)
+
+    def _open_direct():
+        file_size = -1
+        if est_offset > 0:
+            try:
+                file_size = smb.getsize(None, channel.smb, rel)
+            except Exception:
+                pass
+        fh = smb.open_file(None, channel.smb, rel)
+        actual_offset = 0
+        if est_offset > 0:
+            try:
+                if file_size < 0 or est_offset < file_size:
+                    fh.seek(est_offset)
+                    actual_offset = est_offset
+            except Exception:
+                pass
+        return fh, actual_offset
+
+    try:
+        fh, actual_offset = await loop.run_in_executor(None, _open_direct)
+    except Exception as exc:
+        log.error("direct open error %s: %s", rel, exc)
+        return
+
+    log.debug(
+        "direct segment: %s  byte_off=%d  byte_count=%s",
+        rel, actual_offset, byte_count,
+    )
+
+    READ_SIZE = 524288  # 512 KB — fewer round-trips than 64 KB
+    remaining = byte_count
+    chunks_yielded = 0
+    try:
+        while True:
+            to_read = min(READ_SIZE, remaining) if remaining is not None else READ_SIZE
+            chunk = await loop.run_in_executor(None, fh.read, to_read)
+            if not chunk:
+                break
+            chunks_yielded += 1
+            yield chunk
+            if remaining is not None:
+                remaining -= len(chunk)
+                if remaining <= 0:
+                    break
+    finally:
+        await loop.run_in_executor(None, fh.close)
+        log.debug("direct segment done: %s  chunks=%d", rel, chunks_yielded)
+
+
 async def _pipe_smb_segment(
     af: AudioFile,
     channel: ChannelConfig,
@@ -344,6 +424,11 @@ async def stream_audio(
         channel.smb is not None
         and (not channel.local_path or not _is_local_path_usable(channel.local_path))
     )
+    # For native copy mode (MP3→MP3, AAC→AAC), stream bytes directly without
+    # ffmpeg — eliminates process startup, pipe setup, and probe buffering.
+    # WAV is excluded: browsers require a valid RIFF header at offset 0.
+    _use_direct = _use_pipe and copy_mode and native_ext in ("mp3", "aac")
+
     if _use_pipe:
         first_chunk = True
         for i, af in enumerate(files):
@@ -354,18 +439,23 @@ async def stream_audio(
             duration = (outpoint - ss) if outpoint is not None else None
 
             log.debug(
-                "stream_audio pipe [%d/%d] %s ss=%.1f dur=%s byte_off=%d",
+                "stream_audio %s [%d/%d] %s ss=%.1f dur=%s byte_off=%d",
+                "direct" if _use_direct else "pipe",
                 i + 1, len(files), af.rel_path, ss,
                 f"{duration:.1f}" if duration is not None else "EOF",
                 _byte_offset_for_seek(ss, channel),
             )
 
-            async for chunk in _pipe_smb_segment(
-                af, channel, ss, duration, copy_mode, out_format, bitrate, sample_rate
-            ):
+            seg_gen = (
+                _direct_smb_segment(af, channel, ss, duration)
+                if _use_direct else
+                _pipe_smb_segment(af, channel, ss, duration, copy_mode, out_format, bitrate, sample_rate)
+            )
+            async for chunk in seg_gen:
                 if first_chunk:
                     log.info(
-                        "stream_audio first_chunk (pipe): channel=%s in %.2fs",
+                        "stream_audio first_chunk (%s): channel=%s in %.2fs",
+                        "direct" if _use_direct else "pipe",
                         channel.id, time.monotonic() - t0,
                     )
                     first_chunk = False
