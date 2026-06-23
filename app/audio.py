@@ -144,25 +144,28 @@ async def _pipe_smb_segment(
     est_offset = _byte_offset_for_seek(ss, channel)
 
     def _open_file():
-        fh = smb.open_file(None, channel.smb, rel)
-        if est_offset <= 0:
-            return fh, 0, -1
-        try:
-            fh.seek(0, 2)                   # move to end → current pos = file size
-            file_size = fh.tell()
-            if est_offset < file_size:
-                fh.seek(est_offset)
-                return fh, est_offset, file_size
-            # Offset overshoots: old file with different bitrate
-            fh.seek(0)
-            return fh, 0, file_size
-        except Exception:
-            # seek(0,2) failed on this SMB implementation — just start from 0
+        # Get file size via stat (one SMB QueryInfo call) before opening,
+        # so we can validate the byte offset without seek(0,2) which may
+        # read through the entire file on some SMB implementations.
+        file_size = -1
+        if est_offset > 0:
             try:
-                fh.seek(0)
+                file_size = smb.getsize(None, channel.smb, rel)
             except Exception:
                 pass
-            return fh, 0, -1
+
+        fh = smb.open_file(None, channel.smb, rel)
+        if est_offset <= 0:
+            return fh, 0, file_size
+        try:
+            if file_size > 0 and est_offset < file_size:
+                fh.seek(est_offset)
+                return fh, est_offset, file_size
+            # Offset overshoots or size unknown: start from 0, let ffmpeg -ss handle it
+            return fh, 0, file_size
+        except Exception:
+            # seek failed on this SMB implementation — start from 0
+            return fh, 0, file_size
 
     try:
         fh, byte_offset, file_size = await loop.run_in_executor(None, _open_file)
@@ -194,6 +197,9 @@ async def _pipe_smb_segment(
     in_fmt = {"wav": "wav", "aac": "adts"}.get(ext, "mp3")
 
     cmd = [FFMPEG, "-y", "-f", in_fmt]
+    # Disable ffmpeg's default 5-second probe buffer for pipe inputs.
+    # We declare the format explicitly with -f, so no analysis is needed.
+    cmd += ["-analyzeduration", "0", "-probesize", "32"]
     if fine_ss > 0:
         cmd += ["-ss", f"{fine_ss:.3f}"]
     cmd += ["-i", "pipe:0", "-vn"]
