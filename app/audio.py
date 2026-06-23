@@ -170,12 +170,16 @@ async def _direct_smb_segment(
         rel, actual_offset, byte_count,
     )
 
-    READ_SIZE = 524288  # 512 KB — fewer round-trips than 64 KB
+    # First chunk is small so the browser receives audio immediately even on
+    # slow SMB links; subsequent chunks are large to reduce round-trips.
+    FIRST_READ = 32768   # 32 KB  — arrives in ~0.25 s at 1 Mbit/s
+    READ_SIZE  = 524288  # 512 KB — efficient bulk reads after start
     remaining = byte_count
     chunks_yielded = 0
     try:
         while True:
-            to_read = min(READ_SIZE, remaining) if remaining is not None else READ_SIZE
+            size = FIRST_READ if chunks_yielded == 0 else READ_SIZE
+            to_read = min(size, remaining) if remaining is not None else size
             chunk = await loop.run_in_executor(None, fh.read, to_read)
             if not chunk:
                 break
