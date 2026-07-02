@@ -667,6 +667,8 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 }
 .playlist-row:hover .pl-add-btn { opacity: 1; }
 .playlist-row.pl-current .pl-title { font-weight: 700; }
+[data-theme="light"] .playlist-row.pl-current { box-shadow: inset 0 0 0 1000px rgba(0,0,0,0.2); }
+[data-theme="dark"] .playlist-row.pl-current { box-shadow: inset 0 0 0 1000px rgba(255,255,255,0.2); }
 
 /* ── Log-list empty hint ──────────────────────────────────── */
 .loglist-empty-hint {

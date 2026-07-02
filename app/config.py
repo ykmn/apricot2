@@ -59,6 +59,12 @@ def _load_secrets() -> dict[int, dict]:
     return _secrets
 
 
+def invalidate_secrets_cache() -> None:
+    """Force the next _load_secrets() call to re-read config/secret.yaml from disk."""
+    global _secrets
+    _secrets = None
+
+
 def _resolve_password(raw: dict) -> str | None:
     """Resolve password: env var → plaintext field → None."""
     if env_key := raw.get("password_env"):
