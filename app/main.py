@@ -26,12 +26,14 @@ from . import ui_state as _ui_state
 from . import app_logger as _app_logger
 from .app_logger import get_logger
 from .audio import export_audio, set_ffmpeg_path, stream_audio
-from .config import load_playlists, load_settings, load_stations
+from .config import (
+    invalidate_secrets_cache, load_playlists, load_settings, load_stations,
+)
 from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.070"
+VERSION = "1.2.071"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -115,7 +117,12 @@ ws_clients: set[WebSocket] = set()
 def _load_config() -> None:
     global settings, stations_map, playlists_map, all_channels, channels_map, \
            poll_interval, playlog_refresh_interval
+    # settings.yaml → secret.yaml/users.yaml/ldap.yaml → станции → плейлоги.
+    # Станции и плейлоги резолвят secret-id при парсинге, поэтому кеш секретов
+    # обязан быть сброшен (и auth-кеш ldap.yaml — тоже) до их загрузки.
     settings = load_settings()
+    invalidate_secrets_cache()
+    _auth.invalidate_auth_cache()
     stations_map = load_stations()
     playlists_map = load_playlists()
     if ffmpeg := settings.get("ffmpeg_path"):
@@ -130,7 +137,6 @@ def _load_config() -> None:
     _auth.configure(
         session_ttl=int(settings.get("server", {}).get("session_ttl", 7 * 24 * 3600)),
     )
-    _auth.invalidate_auth_cache()
     _srv = settings.get("server", {})
     _app_logger.configure(
         screen_level=str(_srv.get("log_screen", "INFO")),
