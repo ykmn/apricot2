@@ -293,9 +293,16 @@ async def _pipe_smb_segment(
     # Disable ffmpeg's default 5-second probe buffer for pipe inputs.
     # We declare the format explicitly with -f, so no analysis is needed.
     cmd += ["-analyzeduration", "0", "-probesize", "32"]
+    cmd += ["-i", "pipe:0", "-vn"]
+    # fine_ss MUST be an output option (after -i), not an input option.
+    # pipe:0 (stdin) is never seekable, so input-seeking (-ss before -i)
+    # silently fails on it — ffmpeg just starts decoding from byte 0 of
+    # whatever was fed, i.e. playback restarts from the beginning of the
+    # file instead of the requested time. Output-seeking (-ss after -i)
+    # decodes-and-discards up to the timestamp, which works correctly on
+    # non-seekable inputs too — slower, but always correct.
     if fine_ss > 0:
         cmd += ["-ss", f"{fine_ss:.3f}"]
-    cmd += ["-i", "pipe:0", "-vn"]
     if duration is not None:
         cmd += ["-t", f"{duration:.3f}"]
 
