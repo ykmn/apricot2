@@ -33,7 +33,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.071"
+VERSION = "1.2.072"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -109,6 +109,7 @@ all_channels: list = []
 channels_map: dict = {}
 poll_interval: int = 10
 playlog_refresh_interval: int = 1800   # seconds; overridden by settings.yaml
+rescan_all_on_startup: bool = False    # overridden by settings.yaml
 _playlog_status: list = []   # last check result, returned by /api/playlog_status
 
 ws_clients: set[WebSocket] = set()
@@ -116,7 +117,7 @@ ws_clients: set[WebSocket] = set()
 
 def _load_config() -> None:
     global settings, stations_map, playlists_map, all_channels, channels_map, \
-           poll_interval, playlog_refresh_interval
+           poll_interval, playlog_refresh_interval, rescan_all_on_startup
     # settings.yaml → secret.yaml/users.yaml/ldap.yaml → станции → плейлоги.
     # Станции и плейлоги резолвят secret-id при парсинге, поэтому кеш секретов
     # обязан быть сброшен (и auth-кеш ldap.yaml — тоже) до их загрузки.
@@ -133,6 +134,9 @@ def _load_config() -> None:
     poll_interval = settings.get("watcher", {}).get("poll_interval", 10)
     playlog_refresh_interval = int(
         settings.get("playlogs", {}).get("today_refresh_interval", 1800)
+    )
+    rescan_all_on_startup = bool(
+        settings.get("indexing", {}).get("rescan_all_on_startup", False)
     )
     _auth.configure(
         session_ttl=int(settings.get("server", {}).get("session_ttl", 7 * 24 * 3600)),
@@ -269,7 +273,8 @@ async def _log_requests(request: Request, call_next):
 
 async def _background_startup() -> None:
     try:
-        await file_index.initial_scan(progress=_progress_callback)
+        await file_index.initial_scan(progress=_progress_callback,
+                                       force_full=rescan_all_on_startup)
     except Exception as exc:
         log.error("Initial scan failed: %s", exc)
     file_index.start_polling()

@@ -101,10 +101,12 @@ def _check_source_health(config: PlaylistConfig, source: PlaylistSource) -> dict
         base["error"] = str(exc)[:200]
         return base
 
-    # 2. Find .log files (match the file_mask pattern loosely by extension)
-    log_files = sorted(n for n in names if n.lower().endswith(".log"))
+    # 2. Find matching files (match the file_mask pattern loosely by extension —
+    # file_mask can be e.g. "%Y-%m-%d.log" or "%Y-%m-%d.csv")
+    ext = Path(source.file_mask).suffix.lower()
+    log_files = sorted(n for n in names if n.lower().endswith(ext)) if ext else sorted(names)
     if not log_files:
-        base["error"] = "no .log files in folder"
+        base["error"] = f"no {ext or '*'} files in folder"
         return base
 
     # 3. Try to parse the most recent file; verify it yields entries with expected fields
@@ -236,6 +238,10 @@ def _parse(
     d: date,
 ) -> list[PlaylistEntry]:
     text = raw.decode(source.encoding, errors="replace")
+    # Strip a leading UTF-8 BOM if present — otherwise it sticks to the first
+    # header cell (e.g. "﻿EventTime") and breaks column-name matching,
+    # silently producing zero entries for the whole file.
+    text = text.lstrip("﻿")
     reader = csv.reader(io.StringIO(text), delimiter=source.delimiter)
 
     f = config.fields

@@ -63,12 +63,18 @@ def _save_detected(channel_id: str, params: dict) -> None:
 def _apply_detected(ch: ChannelConfig, params: dict) -> bool:
     """Merge detected params into channel config. Returns True if bitrate changed."""
     changed = False
-    if ch.file_extension.lower() == "mp3":
+    if ch.file_extension.lower() in ("mp3", "aac"):
         new_br = params.get("bitrate")
         if new_br and new_br != ch.bitrate:
             log.info("Applying detected bitrate for %s: %r -> %r", ch.id, ch.bitrate, new_br)
             ch.bitrate = new_br
             changed = True
+    if ch.file_extension.lower() == "aac":
+        new_fmt = params.get("in_format")
+        if new_fmt and new_fmt != ch.aac_input_format:
+            log.info("Applying detected AAC container for %s: %r -> %r",
+                      ch.id, ch.aac_input_format, new_fmt)
+            ch.aac_input_format = new_fmt
     new_sr = params.get("sample_rate")
     if new_sr and new_sr != ch.sample_rate:
         ch.sample_rate = new_sr
@@ -307,16 +313,24 @@ class FileIndexManager:
         # All retries exhausted — caller decides whether to log ERROR
         return False, last_error
 
-    async def probe_channel(self, idx: ChannelIndex) -> bool:
+    async def probe_channel(self, idx: ChannelIndex, force: bool = False) -> bool:
         """
         Probe audio params from first available file (cache or quick scan).
         Saves to detected_params.yaml and updates channel config in memory.
         Returns True if bitrate changed (stale cache must be cleared).
+
+        force=True re-probes even if a bitrate is already known — used for a
+        full rescan, so stale/incorrect auto-detected values get refreshed.
         """
         ch = idx.channel
-        if ch.file_extension.lower() not in ("mp3",):
+        ext = ch.file_extension.lower()
+        if ext not in ("mp3", "aac"):
             return False            # WAV: duration from header, no probe needed
-        if ch.bitrate is not None:
+        # AAC also needs its container (raw ADTS vs MPEG-TS) detected once so
+        # the right ffmpeg demuxer gets used — probe even if bitrate is
+        # already configured, as long as that hasn't been learned yet.
+        needs_format = ext == "aac" and ch.aac_input_format is None
+        if ch.bitrate is not None and not force and not needs_format:
             return False            # Already configured by user
 
         loop = asyncio.get_running_loop()
@@ -363,36 +377,41 @@ class FileIndexManager:
 
     # ── Initial scan ───────────────────────────────────────────────────────
 
-    async def initial_scan(self, progress: ProgressFn | None = None) -> None:
+    async def initial_scan(self, progress: ProgressFn | None = None,
+                            force_full: bool = False) -> None:
         total = len(self._indexes)
 
         # ── Phase 1: Fast load from disk cache ───────────────────────────
+        # Skipped for a forced full rescan — every file's duration must be
+        # recomputed from a fresh probe, so a stale disk cache can't be reused.
         total_cached = 0
-        for idx in self._indexes.values():
-            cached = disk_cache.load(idx.channel.id)
-            if cached:
-                for af in cached:
-                    idx._files.add(af)
-                    idx._paths.add(af.rel_path)
-                n = len(cached)
-                for entry in self.index_channels:
-                    if entry["id"] == idx.channel.id:
-                        entry["files"]  = n
-                        entry["cached"] = True
-                total_cached += n
+        if not force_full:
+            for idx in self._indexes.values():
+                cached = disk_cache.load(idx.channel.id)
+                if cached:
+                    for af in cached:
+                        idx._files.add(af)
+                        idx._paths.add(af.rel_path)
+                    n = len(cached)
+                    for entry in self.index_channels:
+                        if entry["id"] == idx.channel.id:
+                            entry["files"]  = n
+                            entry["cached"] = True
+                    total_cached += n
 
-        if total_cached:
-            log.info("Loaded %d files from disk cache (%d channels)", total_cached, total)
-            if progress:
-                progress({
-                    "type":        "cache_loaded",
-                    "total_files": total_cached,
-                    "channels":    total,
-                })
+            if total_cached:
+                log.info("Loaded %d files from disk cache (%d channels)", total_cached, total)
+                if progress:
+                    progress({
+                        "type":        "cache_loaded",
+                        "total_files": total_cached,
+                        "channels":    total,
+                    })
 
         # ── Phase 2: Background rescan ────────────────────────────────────
         self.index_status = "scanning"
-        log.info("Background rescan started — %d channel(s)", total)
+        log.info("Background rescan started — %d channel(s)%s",
+                  total, " (full rescan)" if force_full else "")
         done = 0
 
         for idx in self._indexes.values():
@@ -407,10 +426,11 @@ class FileIndexManager:
                     "channel_name": ch.name,
                 })
 
-            # Probe audio params (only if bitrate unknown)
-            bitrate_changed = await self.probe_channel(idx)
-            if bitrate_changed:
-                log.info("Bitrate updated for %s — clearing stale cache entries", ch.id)
+            # Probe audio params (only if bitrate unknown, or always for a full rescan)
+            bitrate_changed = await self.probe_channel(idx, force=force_full)
+            if bitrate_changed or force_full:
+                if bitrate_changed:
+                    log.info("Bitrate updated for %s — clearing stale cache entries", ch.id)
                 idx.clear()   # force fresh duration computation
 
             success, err_msg = await self._try_scan(idx)

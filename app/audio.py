@@ -277,8 +277,17 @@ async def _pipe_smb_segment(
     # If we fell back to offset=0, pass ss to ffmpeg for internal decode-seek.
     fine_ss = 0.0 if (byte_offset > 0 or ss <= 0) else ss
 
+    # ffmpeg's demuxer for raw ADTS AAC streams is registered as "aac", not
+    # "adts" — "adts" is only the name of the ADTS *muxer* (output format).
+    # Passing "adts" as an input -f value fails with "Unknown input format".
+    # Some HLS-TS captures are still MPEG-TS-wrapped under a ".aac" extension;
+    # channel.aac_input_format holds whichever demuxer audio_probe detected
+    # for this channel's files ("aac" or "mpegts"), falling back to "aac".
     ext = channel.file_extension.lower()
-    in_fmt = {"wav": "wav", "aac": "adts"}.get(ext, "mp3")
+    if ext == "aac":
+        in_fmt = channel.aac_input_format or "aac"
+    else:
+        in_fmt = {"wav": "wav"}.get(ext, "mp3")
 
     cmd = [FFMPEG, "-y", "-f", in_fmt]
     # Disable ffmpeg's default 5-second probe buffer for pipe inputs.
@@ -431,7 +440,13 @@ async def stream_audio(
     # For native copy mode (MP3→MP3, AAC→AAC), stream bytes directly without
     # ffmpeg — eliminates process startup, pipe setup, and probe buffering.
     # WAV is excluded: browsers require a valid RIFF header at offset 0.
-    _use_direct = _use_pipe and copy_mode and native_ext in ("mp3", "aac")
+    # AAC files whose detected container is MPEG-TS are also excluded: raw
+    # TS bytes are not a playable ADTS elementary stream, so they must go
+    # through ffmpeg (pipe mode) to be demuxed/remuxed to ADTS.
+    _use_direct = (
+        _use_pipe and copy_mode and native_ext in ("mp3", "aac")
+        and channel.aac_input_format != "mpegts"
+    )
 
     if _use_pipe:
         first_chunk = True
