@@ -1203,6 +1203,10 @@ function initStatusBar() {
     .catch(() => {});
 }
 
+function _scanModeLabel(mode) {
+  return I18n.t(mode === 'full' ? 'status.scan_mode_full' : 'status.scan_mode_incremental');
+}
+
 function _applyIndexStatus(data) {
   _statusChannels = data.channels || [];
   _rebuildDots();
@@ -1219,13 +1223,13 @@ function _applyIndexStatus(data) {
     const active = _statusChannels.find(c => !c.done);
     const label  = active ? ` · ${_displayName(active.name)}` : '';
     _setStatus('scanning', '',
-      I18n.t('status.index_scanning', { done, total, label }));
+      I18n.t('status.index_scanning', { mode: _scanModeLabel(data.mode), done, total, label }));
   }
 }
 
 function _handleCacheLoaded(msg) {
   _setStatus('scanning', '📦',
-    I18n.t('status.cache_loaded', { files: msg.total_files }));
+    I18n.t('status.cache_loaded', { files: msg.total_files, mode: _scanModeLabel(msg.mode) }));
   // Index just became available from cache — re-fetch without clearing existing data
   if (currentChannel) Timeline.refreshAvailability();
 }
@@ -1234,7 +1238,7 @@ function _handleIndexScanning(msg) {
   _statusChannels.forEach(c => { c.rescanning = (c.id === msg.channel_id); });
   _rebuildDots();
   _setStatus('scanning', '',
-    I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label: ` · ${_displayName(msg.channel_name)}` }));
+    I18n.t('status.index_scanning', { mode: _scanModeLabel(msg.mode), done: msg.done, total: msg.total, label: ` · ${_displayName(msg.channel_name)}` }));
 }
 
 function _displayName(fullName) {
@@ -1261,7 +1265,7 @@ function _handleIndexProgress(msg) {
   const nextCh = _statusChannels.find(c => !c.done);
   const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
   _setStatus('scanning', '',
-    I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label }),
+    I18n.t('status.index_scanning', { mode: _scanModeLabel(msg.mode), done: msg.done, total: msg.total, label }),
     I18n.t('status.detail_done', { name: _displayName(msg.channel_name), files: msg.files }));
 }
 
@@ -1273,7 +1277,7 @@ function _handleIndexError(msg) {
   const nextCh = _statusChannels.find(c => !c.done);
   const label  = nextCh ? ` · ${_displayName(nextCh.name)}` : '';
   _setStatus('scanning', '',
-    I18n.t('status.index_scanning', { done: msg.done, total: msg.total, label }),
+    I18n.t('status.index_scanning', { mode: _scanModeLabel(msg.mode), done: msg.done, total: msg.total, label }),
     I18n.t('status.detail_unavailable', { name: _displayName(msg.channel_name) }));
 }
 

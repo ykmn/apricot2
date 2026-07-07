@@ -2,7 +2,10 @@
 File index: maintains an in-memory index of audio files per channel.
 Startup sequence:
   1. Load from disk cache  → immediate availability
-  2. Background rescan     → audio-probe for correct bitrate, update cache
+  2. Background rescan     → directory listing to find new/removed files
+                              (always runs); audio-probe + duration recompute
+                              only when settings.yaml indexing.rescan_all_on_startup
+                              is true, or bitrate/format wasn't known yet.
 """
 from __future__ import annotations
 
@@ -250,6 +253,7 @@ class FileIndexManager:
         self._task: asyncio.Task | None = None
         self._poll_interval: int = 10
         self.index_status: str = "idle"
+        self.scan_mode: str = "incremental"   # "full" | "incremental" — set by initial_scan()
         self.index_channels: list[dict] = []
         # Channels currently known to be unreachable — used to log errors once
         self._conn_failed: set[str] = set()
@@ -280,6 +284,7 @@ class FileIndexManager:
         total_files = sum(len(idx._files) for idx in self._indexes.values())
         return {
             "status":          self.index_status,
+            "mode":            self.scan_mode,
             "total_channels":  len(self._indexes),
             "done_channels":   sum(1 for c in self.index_channels if c["done"]),
             "failed_channels": sum(1 for c in self.index_channels if c["failed"]),
@@ -380,6 +385,7 @@ class FileIndexManager:
     async def initial_scan(self, progress: ProgressFn | None = None,
                             force_full: bool = False) -> None:
         total = len(self._indexes)
+        self.scan_mode = "full" if force_full else "incremental"
 
         # ── Phase 1: Fast load from disk cache ───────────────────────────
         # Skipped for a forced full rescan — every file's duration must be
@@ -404,14 +410,24 @@ class FileIndexManager:
                 if progress:
                     progress({
                         "type":        "cache_loaded",
+                        "mode":        self.scan_mode,
                         "total_files": total_cached,
                         "channels":    total,
                     })
 
         # ── Phase 2: Background rescan ────────────────────────────────────
+        # This directory listing always runs, even when force_full=False —
+        # it's how new/removed files get detected (same call the poll loop
+        # makes every watcher.poll_interval seconds). What force_full=False
+        # actually skips is the expensive part: re-probing bitrate/format and
+        # recomputing durations for files already known from the disk cache.
         self.index_status = "scanning"
-        log.info("Background rescan started — %d channel(s)%s",
-                  total, " (full rescan)" if force_full else "")
+        log.info(
+            "%s started — %d channel(s)",
+            "Full rescan (cache bypassed, re-probing all files)" if force_full
+            else "Incremental rescan (using disk cache, checking for new/changed files)",
+            total,
+        )
         done = 0
 
         for idx in self._indexes.values():
@@ -420,6 +436,7 @@ class FileIndexManager:
             if progress:
                 progress({
                     "type":         "index_scanning",
+                    "mode":         self.scan_mode,
                     "done":         done,
                     "total":        total,
                     "channel_id":   ch.id,
@@ -459,6 +476,7 @@ class FileIndexManager:
             if progress:
                 msg: dict = {
                     "type":         "index_error" if not success else "index_progress",
+                    "mode":         self.scan_mode,
                     "done":         done,
                     "total":        total,
                     "channel_id":   ch.id,
@@ -478,6 +496,7 @@ class FileIndexManager:
         if progress:
             progress({
                 "type":        "index_done",
+                "mode":        self.scan_mode,
                 "total_files": total_files,
                 "channels":    total,
                 "failed":      failed,
