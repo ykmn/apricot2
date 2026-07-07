@@ -33,7 +33,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.073"
+VERSION = "1.2.074"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -339,9 +339,11 @@ def _html_response(filename: str) -> HTMLResponse:
     """
     text = (STATIC_DIR / filename).read_text(encoding="utf-8")
     # Inject app version so JS can use it for cache-busting fetch() calls.
+    develop = bool(settings.get("develop", False))
     text = text.replace(
         "</head>",
-        f'<script>window.__APP_VERSION__="{VERSION}";window.__BUILD_DATE__="{BUILD_DATE}";</script>\n</head>',
+        f'<script>window.__APP_VERSION__="{VERSION}";window.__BUILD_DATE__="{BUILD_DATE}";'
+        f'window.__DEVELOP__={"true" if develop else "false"};</script>\n</head>',
     )
     text = re.sub(r'((?:href|src)=["\'])([^"\']+\.(?:css|js))(["\'])',
                   rf'\g<1>\g<2>?v={VERSION}\g<3>', text)

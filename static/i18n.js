@@ -35,6 +35,13 @@ const I18n = (() => {
     root.querySelectorAll('[data-i18n-title]').forEach(el => {
       el.title = t(el.dataset.i18nTitle);
     });
+    // settings.yaml: develop: true → mark the header so a debug server is
+    // never mistaken for production. Applied after the translation pass so
+    // it survives language switches.
+    if (window.__DEVELOP__) {
+      const appName = root.querySelector('#app-name');
+      if (appName) appName.textContent += ' отладочный сервер';
+    }
   }
 
   async function _load(lang) {

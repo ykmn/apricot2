@@ -93,6 +93,38 @@ def _byte_offset_for_seek(ss: float, channel: ChannelConfig) -> int:
     return 0
 
 
+_ADTS_SYNC_WINDOW = 16384   # generous vs. max ADTS frame size (8191 bytes)
+
+
+def _find_adts_sync(data: bytes) -> int | None:
+    """Locate a validated ADTS frame sync word in data, or None if not found.
+
+    Raw ADTS AAC cannot be seeked into at an arbitrary byte offset the way MP3
+    can: ffmpeg's "aac" demuxer requires the input to begin exactly on a frame
+    boundary, and a CBR-bitrate byte estimate (see _byte_offset_for_seek)
+    almost never lands there — feeding it a misaligned offset makes ffmpeg
+    fail outright with "Invalid data found when processing input" instead of
+    just being imprecise.  This scans for the 0xFFF sync word and confirms
+    each candidate by checking that its frame_length field correctly points
+    at another sync word later in the buffer, to avoid treating a stray 0xFF
+    byte inside audio data as a false match.
+    """
+    n = len(data)
+    i = 0
+    while i < n - 7:
+        if data[i] == 0xFF and (data[i + 1] & 0xF0) == 0xF0:
+            frame_len = ((data[i + 3] & 0x03) << 11) | (data[i + 4] << 3) | ((data[i + 5] & 0xE0) >> 5)
+            if frame_len >= 7:
+                nxt = i + frame_len
+                if nxt + 1 < n:
+                    if data[nxt] == 0xFF and (data[nxt + 1] & 0xF0) == 0xF0:
+                        return i
+                elif nxt <= n:
+                    return i   # frame runs to (or past) the end of our lookahead window — accept
+        i += 1
+    return None
+
+
 async def _drain_stderr_local(proc: asyncio.subprocess.Process, label: str) -> None:
     """Drain ffmpeg stderr for staging-path invocations to prevent pipe buffer deadlock."""
     try:
@@ -128,12 +160,12 @@ async def _direct_smb_segment(
     """
     rel = af.rel_path
     loop = asyncio.get_running_loop()
+    ext = channel.file_extension.lower()
     est_offset = _byte_offset_for_seek(ss, channel)
 
     # Bytes to send: bitrate * duration / 8, or None = read to EOF.
     byte_count: int | None = None
     if duration is not None:
-        ext = channel.file_extension.lower()
         if ext == "wav":
             byte_count = int(channel.sample_rate * 2 * 2 * duration)
         else:
@@ -150,17 +182,30 @@ async def _direct_smb_segment(
                 pass
         fh = smb.open_file(None, channel.smb, rel)
         actual_offset = 0
+        leftover = b""
         if est_offset > 0:
             try:
                 if file_size < 0 or est_offset < file_size:
                     fh.seek(est_offset)
-                    actual_offset = est_offset
+                    if ext == "aac":
+                        # Raw ADTS is self-framing but not seekable-into: land the
+                        # actual start on a real frame boundary (see _find_adts_sync)
+                        # so the browser's decoder isn't fed a truncated frame.
+                        lookahead = fh.read(_ADTS_SYNC_WINDOW)
+                        sync_i = _find_adts_sync(lookahead)
+                        if sync_i is not None:
+                            actual_offset = est_offset + sync_i
+                            leftover = lookahead[sync_i:]
+                        else:
+                            fh.seek(0)
+                    else:
+                        actual_offset = est_offset
             except Exception:
                 pass
-        return fh, actual_offset
+        return fh, actual_offset, leftover
 
     try:
-        fh, actual_offset = await loop.run_in_executor(None, _open_direct)
+        fh, actual_offset, leftover = await loop.run_in_executor(None, _open_direct)
     except Exception as exc:
         log.error("direct open error %s: %s", rel, exc)
         return
@@ -177,7 +222,12 @@ async def _direct_smb_segment(
     remaining = byte_count
     chunks_yielded = 0
     try:
-        while True:
+        if leftover:
+            chunks_yielded += 1
+            yield leftover
+            if remaining is not None:
+                remaining -= len(leftover)
+        while remaining is None or remaining > 0:
             size = FIRST_READ if chunks_yielded == 0 else READ_SIZE
             to_read = min(size, remaining) if remaining is not None else size
             chunk = await loop.run_in_executor(None, fh.read, to_read)
@@ -187,8 +237,6 @@ async def _direct_smb_segment(
             yield chunk
             if remaining is not None:
                 remaining -= len(chunk)
-                if remaining <= 0:
-                    break
     finally:
         await loop.run_in_executor(None, fh.close)
         log.debug("direct segment done: %s  chunks=%d", rel, chunks_yielded)
@@ -220,6 +268,18 @@ async def _pipe_smb_segment(
     rel = af.rel_path
     loop = asyncio.get_running_loop()
 
+    # ffmpeg's demuxer for raw ADTS AAC streams is registered as "aac", not
+    # "adts" — "adts" is only the name of the ADTS *muxer* (output format).
+    # Passing "adts" as an input -f value fails with "Unknown input format".
+    # Some HLS-TS captures are still MPEG-TS-wrapped under a ".aac" extension;
+    # channel.aac_input_format holds whichever demuxer audio_probe detected
+    # for this channel's files ("aac" or "mpegts"), falling back to "aac".
+    ext = channel.file_extension.lower()
+    if ext == "aac":
+        in_fmt = channel.aac_input_format or "aac"
+    else:
+        in_fmt = {"wav": "wav"}.get(ext, "mp3")
+
     # Open the SMB file and determine the actual seek position.
     # We check the file size before seeking so a stale channel.bitrate value
     # (auto-detected from recent files) cannot cause the offset to overshoot EOF
@@ -240,19 +300,31 @@ async def _pipe_smb_segment(
 
         fh = smb.open_file(None, channel.smb, rel)
         if est_offset <= 0:
-            return fh, 0, file_size
+            return fh, 0, file_size, b""
         try:
             if file_size > 0 and est_offset < file_size:
                 fh.seek(est_offset)
-                return fh, est_offset, file_size
+                if ext == "aac" and in_fmt == "aac":
+                    # Raw ADTS AAC requires input to start exactly on a frame
+                    # boundary — a CBR byte estimate almost never lands there,
+                    # so resync forward to the next real ADTS sync word instead
+                    # of feeding ffmpeg a misaligned stream (which fails outright
+                    # with "Invalid data found when processing input").
+                    lookahead = fh.read(_ADTS_SYNC_WINDOW)
+                    sync_i = _find_adts_sync(lookahead)
+                    if sync_i is not None:
+                        return fh, est_offset + sync_i, file_size, lookahead[sync_i:]
+                    fh.seek(0)
+                    return fh, 0, file_size, b""
+                return fh, est_offset, file_size, b""
             # Offset overshoots or size unknown: start from 0, let ffmpeg -ss handle it
-            return fh, 0, file_size
+            return fh, 0, file_size, b""
         except Exception:
             # seek failed on this SMB implementation — start from 0
-            return fh, 0, file_size
+            return fh, 0, file_size, b""
 
     try:
-        fh, byte_offset, file_size = await loop.run_in_executor(None, _open_file)
+        fh, byte_offset, file_size, leftover = await loop.run_in_executor(None, _open_file)
     except Exception as exc:
         log.error("pipe open error %s: %s", rel, exc)
         return
@@ -276,18 +348,6 @@ async def _pipe_smb_segment(
     # If byte seek covered ss, no additional ffmpeg -ss needed.
     # If we fell back to offset=0, pass ss to ffmpeg for internal decode-seek.
     fine_ss = 0.0 if (byte_offset > 0 or ss <= 0) else ss
-
-    # ffmpeg's demuxer for raw ADTS AAC streams is registered as "aac", not
-    # "adts" — "adts" is only the name of the ADTS *muxer* (output format).
-    # Passing "adts" as an input -f value fails with "Unknown input format".
-    # Some HLS-TS captures are still MPEG-TS-wrapped under a ".aac" extension;
-    # channel.aac_input_format holds whichever demuxer audio_probe detected
-    # for this channel's files ("aac" or "mpegts"), falling back to "aac".
-    ext = channel.file_extension.lower()
-    if ext == "aac":
-        in_fmt = channel.aac_input_format or "aac"
-    else:
-        in_fmt = {"wav": "wav"}.get(ext, "mp3")
 
     cmd = [FFMPEG, "-y", "-f", in_fmt]
     # Disable ffmpeg's default 5-second probe buffer for pipe inputs.
@@ -328,6 +388,9 @@ async def _pipe_smb_segment(
 
     async def feed_stdin() -> None:
         try:
+            if leftover:
+                proc.stdin.write(leftover)
+                await proc.stdin.drain()
             while True:
                 chunk = await loop.run_in_executor(None, fh.read, 65536)
                 if not chunk:
