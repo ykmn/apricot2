@@ -25,6 +25,7 @@ class ChannelConfig:
     file_extension: str = "wav"
     sample_rate: int = 44100
     bitrate: Optional[str] = None
+    aac_input_format: Optional[str] = None  # detected ffmpeg demuxer for .aac: "aac" | "mpegts"
     local_path: Optional[str] = None
     smb: Optional[SMBConfig] = None
     playlogs: list[str] = field(default_factory=list)
