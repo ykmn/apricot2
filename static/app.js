@@ -594,7 +594,11 @@ function _seekPlayback(ts) {
   playFromTs = ts;
   _showPlayLoading();
   const { start: selS, end: selE } = Timeline.getSelection();
-  const endTs = (selE !== null) ? selE : ts + 3600;
+  // Use the selection end as the stop point only when the seek target is
+  // still within/before it — same guard as startPlay(). Without this, seeking
+  // past a stale selection's end sends start > end, which silently matches
+  // no files (empty response, no error) — timeline moves but audio just stops.
+  const endTs = (selE !== null && ts <= selE) ? selE : ts + 3600;
   const url = `/api/audio/stream?channel=${currentChannel.id}&start=${ts}&end=${endTs}&format=mp3&bitrate=192k`;
   audio.src = url;
   audio.play().catch(e => {
