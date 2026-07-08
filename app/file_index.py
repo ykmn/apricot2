@@ -168,15 +168,34 @@ class ChannelIndex:
         return result
 
     def refresh(self, days_back: int = 90, days_ahead: int = 1) -> tuple[list[AudioFile], list[AudioFile]]:
-        """Full rescan of [today-days_back … today+days_ahead]. Returns (added, removed)."""
+        """Full rescan of [today-days_back … today+days_ahead]. Returns (added, removed).
+
+        If any date's scan fails with a real error (auth/connection — see
+        smb_client.scandir, which deliberately raises for these instead of
+        returning []), the whole refresh is aborted WITHOUT touching the
+        existing index. Only "folder not created yet" is treated as empty.
+        Without this guard, a transient outage (e.g. a Kerberos ticket not
+        yet available right after server startup) would make every date scan
+        fail at once, current would end up empty, and the diff below would
+        read that as "every previously known file was deleted" — silently
+        wiping the whole channel's index instead of leaving cached data in
+        place until the next successful poll. The last such error is
+        re-raised so callers (poll loop / initial scan) mark the channel
+        unreachable and retry, instead of the failure being invisible.
+        """
         today = date.today()
         dates = [today - timedelta(days=i) for i in range(days_back, -days_ahead - 1, -1)]
         current: dict[str, AudioFile] = {}
+        scan_error: Exception | None = None
         for d in dates:
             try:
                 current.update(self._scan_date(d))
             except Exception as exc:
                 log.debug("scan_date skipped %s/%s: %s", self.channel.id, d, exc)
+                scan_error = exc
+
+        if scan_error is not None:
+            raise scan_error
 
         new_paths     = set(current.keys())
         added_keys    = new_paths - self._paths
@@ -295,9 +314,17 @@ class FileIndexManager:
     # ── Scan helpers ───────────────────────────────────────────────────────
 
     async def _try_scan(self, idx: ChannelIndex,
-                        max_retries: int = 2,
-                        timeout: float = 30.0) -> tuple[bool, str]:
-        """Scan with retries + per-attempt timeout. Returns (success, error_message)."""
+                        max_retries: int = 3,
+                        timeout: float = 30.0,
+                        retry_delay: float = 3.0) -> tuple[bool, str]:
+        """Scan with retries + per-attempt timeout. Returns (success, error_message).
+
+        A short pause between attempts gives a transient condition time to
+        clear — notably a Kerberos ticket not yet provisioned right at server
+        startup (an external kinit/cron process populates it asynchronously;
+        retrying back-to-back with no delay just fails the same way every
+        time, since the ticket cache is still empty a few milliseconds later).
+        """
         loop = asyncio.get_running_loop()
         last_error = ""
         for attempt in range(1, max_retries + 1):
@@ -315,6 +342,8 @@ class FileIndexManager:
                 last_error = _short_error(exc)
                 log.debug("Scan error for %s (attempt %d/%d): %s",
                           idx.channel.id, attempt, max_retries, exc)
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
         # All retries exhausted — caller decides whether to log ERROR
         return False, last_error
 
