@@ -314,9 +314,17 @@ class FileIndexManager:
     # ── Scan helpers ───────────────────────────────────────────────────────
 
     async def _try_scan(self, idx: ChannelIndex,
-                        max_retries: int = 2,
-                        timeout: float = 30.0) -> tuple[bool, str]:
-        """Scan with retries + per-attempt timeout. Returns (success, error_message)."""
+                        max_retries: int = 3,
+                        timeout: float = 30.0,
+                        retry_delay: float = 3.0) -> tuple[bool, str]:
+        """Scan with retries + per-attempt timeout. Returns (success, error_message).
+
+        A short pause between attempts gives a transient condition time to
+        clear — notably a Kerberos ticket not yet provisioned right at server
+        startup (an external kinit/cron process populates it asynchronously;
+        retrying back-to-back with no delay just fails the same way every
+        time, since the ticket cache is still empty a few milliseconds later).
+        """
         loop = asyncio.get_running_loop()
         last_error = ""
         for attempt in range(1, max_retries + 1):
@@ -334,6 +342,8 @@ class FileIndexManager:
                 last_error = _short_error(exc)
                 log.debug("Scan error for %s (attempt %d/%d): %s",
                           idx.channel.id, attempt, max_retries, exc)
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
         # All retries exhausted — caller decides whether to log ERROR
         return False, last_error
 
