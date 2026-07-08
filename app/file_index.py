@@ -168,15 +168,34 @@ class ChannelIndex:
         return result
 
     def refresh(self, days_back: int = 90, days_ahead: int = 1) -> tuple[list[AudioFile], list[AudioFile]]:
-        """Full rescan of [today-days_back … today+days_ahead]. Returns (added, removed)."""
+        """Full rescan of [today-days_back … today+days_ahead]. Returns (added, removed).
+
+        If any date's scan fails with a real error (auth/connection — see
+        smb_client.scandir, which deliberately raises for these instead of
+        returning []), the whole refresh is aborted WITHOUT touching the
+        existing index. Only "folder not created yet" is treated as empty.
+        Without this guard, a transient outage (e.g. a Kerberos ticket not
+        yet available right after server startup) would make every date scan
+        fail at once, current would end up empty, and the diff below would
+        read that as "every previously known file was deleted" — silently
+        wiping the whole channel's index instead of leaving cached data in
+        place until the next successful poll. The last such error is
+        re-raised so callers (poll loop / initial scan) mark the channel
+        unreachable and retry, instead of the failure being invisible.
+        """
         today = date.today()
         dates = [today - timedelta(days=i) for i in range(days_back, -days_ahead - 1, -1)]
         current: dict[str, AudioFile] = {}
+        scan_error: Exception | None = None
         for d in dates:
             try:
                 current.update(self._scan_date(d))
             except Exception as exc:
                 log.debug("scan_date skipped %s/%s: %s", self.channel.id, d, exc)
+                scan_error = exc
+
+        if scan_error is not None:
+            raise scan_error
 
         new_paths     = set(current.keys())
         added_keys    = new_paths - self._paths
