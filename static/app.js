@@ -1191,16 +1191,24 @@ function initStatusBar() {
   });
 
   // Fetch current state (handles page reload mid-scan or after scan)
-  fetch('/api/index_status')
-    .then(r => r.json())
-    .then(data => _applyIndexStatus(data))
-    .catch(() => _setStatus('error', '⚠', I18n.t('status.init')));
+  _refreshIndexStatus().catch(() => _setStatus('error', '⚠', I18n.t('status.init')));
 
   // Fetch last playlog check result (may be empty if check not done yet)
   fetch('/api/playlog_status')
     .then(r => r.json())
     .then(data => { if (data.length) _applyPlaylogStatus(data); })
     .catch(() => {});
+}
+
+// Re-fetch the channel list from the server and rebuild _statusChannels/dots
+// from scratch — mirrors _applyPlaylogStatus, which already fully replaces
+// _plSources on every update. Without this, a channel removed from config
+// keeps its stale dot forever (and a newly added one never gets one) until
+// a full page reload, because no other code path ever drops entries from
+// _statusChannels — the WS progress handlers only ever update-in-place.
+async function _refreshIndexStatus() {
+  const data = await (await fetch('/api/index_status')).json();
+  _applyIndexStatus(data);
 }
 
 function _scanModeLabel(mode) {
@@ -1533,6 +1541,7 @@ function connectWebSocket() {
       Timeline.addAvailability(msg.added, msg.removed);
     } else if (msg.type === 'config_reloaded') {
       loadStations().then(buildChannelDropdown);
+      _refreshIndexStatus().catch(() => {});
     } else if (msg.type === 'cache_loaded') {
       _handleCacheLoaded(msg);
     } else if (msg.type === 'index_scanning') {
@@ -1697,6 +1706,7 @@ function initHamburgerMenu() {
       const res = await api('/api/reload', { method: 'POST' });
       await loadStations();
       buildChannelDropdown();
+      await _refreshIndexStatus().catch(() => {});
       _setStatus('ready', '✓',
         I18n.t('status.config_reloaded', { stations: res.stations, channels: res.channels, playlogs: res.playlogs }));
     } catch (e) {
