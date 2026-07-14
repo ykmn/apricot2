@@ -86,7 +86,16 @@ def _byte_offset_for_seek(ss: float, channel: ChannelConfig) -> int:
         return 0
     ext = channel.file_extension.lower()
     if ext == "wav":
-        return 44 + int(channel.sample_rate * 2 * 2 * ss)   # 16-bit stereo PCM
+        frame_size = 4   # 16-bit stereo PCM: 2 bytes/sample * 2 channels
+        raw = int(channel.sample_rate * 2 * 2 * ss)
+        raw -= raw % frame_size   # keep the offset on a sample-frame boundary —
+        # `ss` is an arbitrary high-precision float (derived from a Unix
+        # timestamp subtraction), so the unrounded byte count almost never
+        # lands on a 4-byte boundary. Feeding ffmpeg a misaligned raw-PCM
+        # stream doesn't fail outright (unlike the RIFF-header case) — it
+        # just decodes every sample shifted by 1-3 bytes, which comes out
+        # as channel-swapped, garbled noise instead of a decode error.
+        return 44 + raw
     bps = _parse_bitrate_bps(channel.bitrate)
     if bps > 0:
         return int(bps / 8 * ss)
