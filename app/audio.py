@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -86,7 +86,16 @@ def _byte_offset_for_seek(ss: float, channel: ChannelConfig) -> int:
         return 0
     ext = channel.file_extension.lower()
     if ext == "wav":
-        return 44 + int(channel.sample_rate * 2 * 2 * ss)   # 16-bit stereo PCM
+        frame_size = 4   # 16-bit stereo PCM: 2 bytes/sample * 2 channels
+        raw = int(channel.sample_rate * 2 * 2 * ss)
+        raw -= raw % frame_size   # keep the offset on a sample-frame boundary —
+        # `ss` is an arbitrary high-precision float (derived from a Unix
+        # timestamp subtraction), so the unrounded byte count almost never
+        # lands on a 4-byte boundary. Feeding ffmpeg a misaligned raw-PCM
+        # stream doesn't fail outright (unlike the RIFF-header case) — it
+        # just decodes every sample shifted by 1-3 bytes, which comes out
+        # as channel-swapped, garbled noise instead of a decode error.
+        return 44 + raw
     bps = _parse_bitrate_bps(channel.bitrate)
     if bps > 0:
         return int(bps / 8 * ss)
@@ -349,7 +358,19 @@ async def _pipe_smb_segment(
     # If we fell back to offset=0, pass ss to ffmpeg for internal decode-seek.
     fine_ss = 0.0 if (byte_offset > 0 or ss <= 0) else ss
 
+    # A mid-file WAV seek lands past the 44-byte RIFF header, so the bytes fed
+    # to ffmpeg start with raw PCM samples, not a RIFF/WAVE header. Declaring
+    # "-f wav" on that headerless stream makes ffmpeg reject it outright
+    # ("invalid start code ... in RIFF header") — the segment then produces
+    # zero output, which is heard as silence even though the timeline/playhead
+    # still advances normally. Byte offset 0 (ss<=0, or an overshoot fallback)
+    # still starts at the real header, so "wav" stays correct there.
+    if ext == "wav" and byte_offset > 0:
+        in_fmt = "s16le"
+
     cmd = [FFMPEG, "-y", "-f", in_fmt]
+    if in_fmt == "s16le":
+        cmd += ["-ar", str(channel.sample_rate), "-ac", "2"]
     # Disable ffmpeg's default 5-second probe buffer for pipe inputs.
     # We declare the format explicitly with -f, so no analysis is needed.
     cmd += ["-analyzeduration", "0", "-probesize", "32"]
@@ -453,6 +474,77 @@ async def _pipe_smb_segment(
             log.debug("pipe segment done: %s  chunks=%d  rc=%d", rel, chunks_yielded, rc)
 
 
+def _silence_cmd(
+    duration: float,
+    channel: ChannelConfig,
+    out_format: str,
+    bitrate: str,
+    sample_rate: int | None,
+    copy_mode: bool,
+) -> list[str]:
+    """ffmpeg command generating `duration` seconds of silence, encoded to
+    match whatever format the surrounding real segments use."""
+    sr = sample_rate or channel.sample_rate or 44100
+    fmt, br = out_format, bitrate
+    if copy_mode:
+        fmt = _native_format(channel)
+        br = channel.bitrate or bitrate
+    cmd = [
+        FFMPEG, "-y",
+        "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate={sr}",
+        "-t", f"{duration:.3f}",
+    ]
+    if fmt == "wav":
+        cmd += ["-acodec", "pcm_s16le", "-f", "wav"]
+    elif fmt in ("aac", "adts"):
+        cmd += ["-acodec", "aac", "-b:a", br, "-f", "adts"]
+    else:
+        cmd += ["-acodec", "libmp3lame", "-b:a", br, "-f", "mp3"]
+    return cmd
+
+
+async def _silence_segment(
+    duration: float,
+    channel: ChannelConfig,
+    out_format: str,
+    bitrate: str,
+    sample_rate: int | None,
+    copy_mode: bool,
+) -> AsyncGenerator[bytes, None]:
+    """Yield encoded silence filling a gap between fragments.
+
+    Fragments are recorded intermittently (e.g. only while there's signal),
+    so consecutive AudioFile entries can have a real time gap between one's
+    end_dt and the next's start_dt. stream_audio previously concatenated
+    fragment bytes back-to-back with no silence for that gap, so the output
+    audio was shorter than the requested wall-clock range. The frontend
+    playhead (app.js _startPlayheadAnimation) advances on elapsed real time
+    since playback start, assuming continuous audio — without filling gaps,
+    the displayed timeline position drifts away from what's actually
+    audible after any skipped gap.
+    """
+    if duration <= 0.05:
+        return
+    cmd = _silence_cmd(duration, channel, out_format, bitrate, sample_rate, copy_mode) + ["pipe:1"]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    stderr_task = asyncio.create_task(_drain_stderr_local(proc, "silence"))
+    try:
+        while True:
+            chunk = await proc.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        stderr_task.cancel()
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+
+
 async def stream_audio(
     channel: ChannelConfig,
     start: datetime,
@@ -520,12 +612,25 @@ async def stream_audio(
 
     if _use_pipe:
         first_chunk = True
+        cursor_dt = start
         for i, af in enumerate(files):
             is_first = (i == 0)
             is_last  = (i == len(files) - 1)
             ss       = max(0.0, (start - af.start_dt).total_seconds()) if is_first else 0.0
             outpoint = (end - af.start_dt).total_seconds() if is_last else None
             duration = (outpoint - ss) if outpoint is not None else None
+
+            # Fragments are recorded intermittently — fill any real time gap
+            # between the previous fragment's end and this one's start with
+            # silence, so the streamed audio's length matches wall-clock time
+            # and the frontend's elapsed-time playhead stays in sync.
+            seg_start_dt = af.start_dt + timedelta(seconds=ss)
+            gap = (seg_start_dt - cursor_dt).total_seconds()
+            if gap > 0.05:
+                async for chunk in _silence_segment(gap, channel, out_format, bitrate, sample_rate, copy_mode):
+                    if first_chunk:
+                        first_chunk = False
+                    yield chunk
 
             log.debug(
                 "stream_audio %s [%d/%d] %s ss=%.1f dur=%s byte_off=%d",
@@ -549,6 +654,16 @@ async def stream_audio(
                     )
                     first_chunk = False
                 yield chunk
+
+            cursor_dt = af.end_dt
+
+        # No trailing silence out to `end`: during ordinary playback `end` is
+        # usually a soft lookahead cap (see startPlay()/​_seekPlayback() in
+        # app.js, which default to `ts + 3600` when there's no explicit
+        # selection), not a real boundary — padding all the way out to it
+        # would turn "stream ends when real recordings run out" into up to an
+        # hour of synthesized silence. Unlike internal/leading gaps (bounded
+        # by real fragments on both sides), this one has no natural bound.
         return
 
     # ── Local / mounted path ──────────────────────────────────────────────────
@@ -560,6 +675,7 @@ async def stream_audio(
         ]
 
         first_chunk = True
+        cursor_dt = start
         try:
             # Process files in order: await each task, start ffmpeg as soon as ready.
             # While ffmpeg is processing file N, file N+1 is already downloading.
@@ -572,6 +688,17 @@ async def stream_audio(
                 is_last  = (i == len(files) - 1)
                 ss       = max(0.0, (start - af.start_dt).total_seconds()) if is_first else 0.0
                 outpoint = (end - af.start_dt).total_seconds() if is_last else None
+
+                # Fragments are recorded intermittently — fill any real time
+                # gap between the previous fragment's end and this one's
+                # start with silence (see _silence_segment for why).
+                seg_start_dt = af.start_dt + timedelta(seconds=ss)
+                gap = (seg_start_dt - cursor_dt).total_seconds()
+                if gap > 0.05:
+                    async for chunk in _silence_segment(gap, channel, out_format, bitrate, sample_rate, copy_mode):
+                        if first_chunk:
+                            first_chunk = False
+                        yield chunk
 
                 # Per-file concat list — reuses inpoint/outpoint trim logic.
                 seg_concat = Path(tmpdir) / f"concat_{i:04d}.txt"
@@ -641,10 +768,43 @@ async def stream_audio(
                             f"{outpoint:.1f}" if outpoint is not None else "EOF",
                         )
 
+                cursor_dt = af.end_dt
+
+            # No trailing silence out to `end` — see the matching comment in
+            # the SMB pipe branch above: `end` is usually a soft lookahead
+            # cap during ordinary playback, not a real boundary.
+
         finally:
             # Cancel any downloads still in progress (e.g. client disconnected).
             for task in dl_tasks:
                 task.cancel()
+
+
+async def _write_silence_file(path: Path, duration: float, channel: ChannelConfig) -> bool:
+    """Write `duration` seconds of silence to `path`, encoded in the channel's
+    native format so it concatenates seamlessly with staged fragment files
+    (see _silence_segment for why gaps between fragments need filling)."""
+    if duration <= 0.05:
+        return False
+    ext = channel.file_extension.lower()
+    sr = channel.sample_rate or 44100
+    cmd = [
+        FFMPEG, "-y",
+        "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate={sr}",
+        "-t", f"{duration:.3f}",
+    ]
+    if ext == "wav":
+        cmd += ["-acodec", "pcm_s16le", "-f", "wav"]
+    elif ext == "aac":
+        cmd += ["-acodec", "aac", "-b:a", channel.bitrate or "192k", "-f", "adts"]
+    else:
+        cmd += ["-acodec", "libmp3lame", "-b:a", channel.bitrate or "192k", "-f", "mp3"]
+    cmd += [str(path)]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    rc = await proc.wait()
+    return rc == 0 and path.exists()
 
 
 async def export_audio(
@@ -676,13 +836,16 @@ async def export_audio(
         raise RuntimeError(f"No audio files found for {channel.id!r} in requested range")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        input_paths = await _stage_files(files, tmpdir, channel)
-        if not input_paths:
+        staged = await asyncio.gather(
+            *(_stage_one(i, af, len(files), tmpdir, channel) for i, af in enumerate(files))
+        )
+        pairs = [(af, p) for af, p in zip(files, staged) if p]
+        if not pairs:
             raise RuntimeError(f"Failed to stage audio files for {channel.id!r}")
 
         concat_list = Path(tmpdir) / "concat.txt"
-        first_file = files[0]
-        last_file  = files[-1]
+        first_file = pairs[0][0]
+        last_file  = pairs[-1][0]
         ss = max(0.0, (start - first_file.start_dt).total_seconds())
         last_file_duration = (end - last_file.start_dt).total_seconds()
 
@@ -690,15 +853,40 @@ async def export_audio(
         if not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
             copy_mode = True
 
+        # Fragments are recorded intermittently — fill any real time gap
+        # between fragments (and before/after the selection's edge fragments)
+        # with silence, so the exported clip's duration matches the requested
+        # wall-clock range instead of being silently shorter.
+        cursor_dt = start
         with concat_list.open("w", encoding="utf-8") as f:
             f.write("ffconcat version 1.0\n")
-            for idx_f, p in enumerate(input_paths):
+            for i, (af, p) in enumerate(pairs):
+                is_first = (i == 0)
+                is_last  = (i == len(pairs) - 1)
+
+                seg_start_dt = af.start_dt + timedelta(seconds=(ss if is_first else 0))
+                gap = (seg_start_dt - cursor_dt).total_seconds()
+                if gap > 0.05:
+                    sfile = Path(tmpdir) / f"silence_{i:04d}.{channel.file_extension}"
+                    if await _write_silence_file(sfile, gap, channel):
+                        safe_s = str(sfile).replace("\\", "/").replace("'", "\\'")
+                        f.write(f"file '{safe_s}'\n")
+
                 safe_p = p.replace("\\", "/").replace("'", "\\'")
                 f.write(f"file '{safe_p}'\n")
-                if idx_f == 0 and ss > 0:
+                if is_first and ss > 0:
                     f.write(f"inpoint {ss}\n")
-                if idx_f == len(input_paths) - 1:
+                if is_last:
                     f.write(f"outpoint {last_file_duration}\n")
+
+                cursor_dt = min(af.end_dt, end) if is_last else af.end_dt
+
+            trailing = (end - cursor_dt).total_seconds()
+            if trailing > 0.05:
+                sfile = Path(tmpdir) / f"silence_trail.{channel.file_extension}"
+                if await _write_silence_file(sfile, trailing, channel):
+                    safe_s = str(sfile).replace("\\", "/").replace("'", "\\'")
+                    f.write(f"file '{safe_s}'\n")
 
         cmd = [
             FFMPEG, "-y",
@@ -780,16 +968,6 @@ async def _stage_one(
     except Exception as exc:
         log.error("stage [%d/%d] failed %s: %s", i + 1, total, rel, exc)
         return None
-
-
-async def _stage_files(
-    files: list[AudioFile], tmpdir: str, channel: ChannelConfig
-) -> list[str]:
-    """Download all files in parallel. Used by export_audio."""
-    results = await asyncio.gather(
-        *(_stage_one(i, af, len(files), tmpdir, channel) for i, af in enumerate(files))
-    )
-    return [p for p in results if p is not None]
 
 
 def _rel_from_af(af: AudioFile, channel: ChannelConfig) -> str:
