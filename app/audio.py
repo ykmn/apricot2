@@ -349,7 +349,19 @@ async def _pipe_smb_segment(
     # If we fell back to offset=0, pass ss to ffmpeg for internal decode-seek.
     fine_ss = 0.0 if (byte_offset > 0 or ss <= 0) else ss
 
+    # A mid-file WAV seek lands past the 44-byte RIFF header, so the bytes fed
+    # to ffmpeg start with raw PCM samples, not a RIFF/WAVE header. Declaring
+    # "-f wav" on that headerless stream makes ffmpeg reject it outright
+    # ("invalid start code ... in RIFF header") — the segment then produces
+    # zero output, which is heard as silence even though the timeline/playhead
+    # still advances normally. Byte offset 0 (ss<=0, or an overshoot fallback)
+    # still starts at the real header, so "wav" stays correct there.
+    if ext == "wav" and byte_offset > 0:
+        in_fmt = "s16le"
+
     cmd = [FFMPEG, "-y", "-f", in_fmt]
+    if in_fmt == "s16le":
+        cmd += ["-ar", str(channel.sample_rate), "-ac", "2"]
     # Disable ffmpeg's default 5-second probe buffer for pipe inputs.
     # We declare the format explicitly with -f, so no analysis is needed.
     cmd += ["-analyzeduration", "0", "-probesize", "32"]
