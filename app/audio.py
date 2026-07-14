@@ -634,12 +634,15 @@ async def stream_audio(
                     first_chunk = False
                 yield chunk
 
-            cursor_dt = min(af.end_dt, end) if is_last else af.end_dt
+            cursor_dt = af.end_dt
 
-        trailing = (end - cursor_dt).total_seconds()
-        if trailing > 0.05:
-            async for chunk in _silence_segment(trailing, channel, out_format, bitrate, sample_rate, copy_mode):
-                yield chunk
+        # No trailing silence out to `end`: during ordinary playback `end` is
+        # usually a soft lookahead cap (see startPlay()/​_seekPlayback() in
+        # app.js, which default to `ts + 3600` when there's no explicit
+        # selection), not a real boundary — padding all the way out to it
+        # would turn "stream ends when real recordings run out" into up to an
+        # hour of synthesized silence. Unlike internal/leading gaps (bounded
+        # by real fragments on both sides), this one has no natural bound.
         return
 
     # ── Local / mounted path ──────────────────────────────────────────────────
@@ -744,12 +747,11 @@ async def stream_audio(
                             f"{outpoint:.1f}" if outpoint is not None else "EOF",
                         )
 
-                cursor_dt = min(af.end_dt, end) if is_last else af.end_dt
+                cursor_dt = af.end_dt
 
-            trailing = (end - cursor_dt).total_seconds()
-            if trailing > 0.05:
-                async for chunk in _silence_segment(trailing, channel, out_format, bitrate, sample_rate, copy_mode):
-                    yield chunk
+            # No trailing silence out to `end` — see the matching comment in
+            # the SMB pipe branch above: `end` is usually a soft lookahead
+            # cap during ordinary playback, not a real boundary.
 
         finally:
             # Cancel any downloads still in progress (e.g. client disconnected).
