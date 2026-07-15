@@ -10,7 +10,7 @@
     "rescan_playlogs": "📋 Rescan playlogs",
     "reload_config": "🔄 Reload configuration",
     "restart_server": "🧑‍💻 Restart server",
-    "logout": "🚪 Log out",
+    "logout": "Log out",
     "language": "🌐 Language",
     "about": "ℹ️ About…",
     "sessions": "👥 Sessions…",
@@ -65,6 +65,7 @@
   },
   "playlog": {
     "checking": "Checking playlogs…",
+    "checking_progress": "Checking playlogs ({done}/{total}) · {name}…",
     "available": "Playlogs available · {n} source(s)",
     "unavailable": "Playlogs: {failed} of {total} unavailable",
     "no_channel": "Select a channel first",

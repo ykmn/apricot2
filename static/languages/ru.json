@@ -10,7 +10,7 @@
     "rescan_playlogs": "📋 Пересканировать плейлоги",
     "reload_config": "🔄 Обновить конфигурацию без перезапуска",
     "restart_server": "🧑‍💻 Перезапустить сервер",
-    "logout": "🚪 Выйти",
+    "logout": "Выйти",
     "language": "🌐 Язык",
     "about": "ℹ️ О веб-приложении…",
     "sessions": "👥 Сессии…",
@@ -65,6 +65,7 @@
   },
   "playlog": {
     "checking": "Проверка плейлогов…",
+    "checking_progress": "Проверка плейлогов ({done}/{total}) · {name}…",
     "available": "Плейлоги доступны · {n} источн.",
     "unavailable": "Плейлоги: {failed} из {total} недоступн.",
     "no_channel": "Сначала выберите канал",

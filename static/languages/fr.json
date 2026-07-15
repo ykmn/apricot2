@@ -10,7 +10,7 @@
     "rescan_playlogs": "📋 Rescanner les Journaux",
     "reload_config": "🔄 Recharger la configuration",
     "restart_server": "🧑‍💻 Redémarrer le serveur",
-    "logout": "🚪 Se déconnecter",
+    "logout": "Se déconnecter",
     "language": "🌐 Langue",
     "about": "ℹ️ À propos…",
     "sessions": "👥 Sessions…",
@@ -65,6 +65,7 @@
   },
   "playlog": {
     "checking": "Vérification des journaux…",
+    "checking_progress": "Vérification des journaux ({done}/{total}) · {name}…",
     "available": "Journaux disponibles · {n} source(s)",
     "unavailable": "Journaux : {failed} sur {total} indisponible(s)",
     "no_channel": "Sélectionnez d'abord une chaîne",

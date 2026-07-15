@@ -474,7 +474,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   align-items: center;
   flex-shrink: 0;
   justify-content: flex-end;
-  max-width: 60%;
+  max-width: calc(20 * 8px + 19 * 4px); /* ≤20 точек в строке */
 }
 .status-dot {
   width: 8px;
@@ -968,12 +968,35 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   user-select: none;
 }
 .menu-userinfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   color: var(--text2);
-  padding: 6px 14px 4px;
+  padding: 4px 8px 4px 14px;
   user-select: none;
 }
-.menu-item-danger { color: var(--danger) !important; }
+.menu-userinfo-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-userinfo-logout {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+.menu-userinfo-logout:hover { background: var(--bg3); }
 
 /* ── Language selector in menu ────────────────────────────── */
 .menu-lang-row {

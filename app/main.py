@@ -33,7 +33,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.089"
+VERSION = "1.2.090"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -111,6 +111,7 @@ poll_interval: int = 10
 playlog_refresh_interval: int = 1800   # seconds; overridden by settings.yaml
 rescan_all_on_startup: bool = False    # overridden by settings.yaml
 _playlog_status: list = []   # last check result, returned by /api/playlog_status
+_playlog_scanning_lock = asyncio.Lock()   # serializes _preload_playlogs() runs
 
 ws_clients: set[WebSocket] = set()
 
@@ -284,33 +285,46 @@ async def _background_startup() -> None:
 
 
 async def _preload_playlogs() -> None:
-    """Preload and cache playlogs for the last PRELOAD_DAYS days, then broadcast source status."""
+    """Preload and cache playlogs for the last PRELOAD_DAYS days, one playlist
+    at a time, broadcasting progress the same way file_index.initial_scan does
+    per channel. The lock keeps overlapping calls (startup / reload / manual
+    rescan) queued instead of scanning concurrently."""
     global _playlog_status
-    from datetime import timedelta
     from .playlist import check_sources, preload, PRELOAD_DAYS
 
     configs = list(playlists_map.values())
     if not configs:
         return
 
-    _broadcast_raw(json.dumps({"type": "playlog_checking"}))
+    async with _playlog_scanning_lock:
+        total = len(configs)
+        results = []
+        for done_idx, pl_cfg in enumerate(configs, 1):
+            _broadcast_raw(json.dumps({
+                "type":    "playlog_checking",
+                "pl_id":   pl_cfg.id,
+                "pl_name": pl_cfg.name,
+                "done":    done_idx - 1,
+                "total":   total,
+            }))
 
-    def _run_preload():
-        preload(configs, days_back=PRELOAD_DAYS)
+            await asyncio.to_thread(preload, [pl_cfg], PRELOAD_DAYS)
+            sources = await asyncio.to_thread(check_sources, pl_cfg)
 
-    await asyncio.to_thread(_run_preload)
+            entry = {"id": pl_cfg.id, "name": pl_cfg.name, "sources": sources}
+            results.append(entry)
+            _broadcast_raw(json.dumps({
+                "type":    "playlog_progress",
+                "playlog": entry,
+                "done":    done_idx,
+                "total":   total,
+            }))
 
-    # Check per-source folder health for the status bar
-    results = []
-    for pl_cfg in configs:
-        src = await asyncio.to_thread(check_sources, pl_cfg)
-        results.append({"id": pl_cfg.id, "name": pl_cfg.name, "sources": src})
-
-    _playlog_status = results
-    _broadcast_raw(json.dumps({"type": "playlog_status", "playlogs": results}))
-    ok  = sum(1 for pl in results for s in pl["sources"] if s["ok"])
-    bad = sum(1 for pl in results for s in pl["sources"] if not s["ok"])
-    log.info("Playlog preload done (%d days): %d ok, %d unavailable", PRELOAD_DAYS, ok, bad)
+        _playlog_status = results
+        _broadcast_raw(json.dumps({"type": "playlog_status", "playlogs": results}))
+        ok  = sum(1 for pl in results for s in pl["sources"] if s["ok"])
+        bad = sum(1 for pl in results for s in pl["sources"] if not s["ok"])
+        log.info("Playlog preload done (%d days): %d ok, %d unavailable", PRELOAD_DAYS, ok, bad)
 
 
 async def _playlog_today_refresh_loop() -> None:

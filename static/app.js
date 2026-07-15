@@ -44,20 +44,21 @@ function _applyAuthUI() {
     el.classList.toggle('hidden', !isAdmin);
   });
 
-  // Show user info + logout if auth is active
+  // Show user info + logout (combined into one row) if auth is active
   if (currentUser?.auth_required && currentUser?.username) {
-    const info = document.getElementById('menu-userinfo');
-    const sep  = document.getElementById('menu-sep-logout');
-    const btn  = document.getElementById('menu-logout');
-    if (info) {
+    const info   = document.getElementById('menu-userinfo');
+    const sep    = document.getElementById('menu-sep-logout');
+    const iconEl = document.getElementById('menu-userinfo-icon');
+    const nameEl = document.getElementById('menu-userinfo-name');
+    if (info && iconEl && nameEl) {
       const displayName = currentUser.domain
         ? `${currentUser.domain}\\${currentUser.username}`
         : currentUser.username;
-      info.textContent = `👤 ${displayName}`;
+      iconEl.textContent = isAdmin ? '👷' : '👤';
+      nameEl.textContent = displayName;
       info.classList.remove('hidden');
     }
-    if (sep)  sep.classList.remove('hidden');
-    if (btn)  btn.classList.remove('hidden');
+    if (sep) sep.classList.remove('hidden');
   }
 }
 
@@ -1307,15 +1308,31 @@ function _handleIndexDone(msg) {
 
 // ── Playlog status bar ─────────────────────────────────────────────────────
 
-function _handlePlaylogChecking() {
+function _handlePlaylogChecking(msg) {
   const bar = document.getElementById('playlog-bar');
   bar.classList.remove('hidden');
-  _plSources = _plSources.map(s => ({ ...s, checking: true }));
-  if (!_plSources.length) {
-    _spinnerStart(document.getElementById('plbar-icon'));
-    document.getElementById('plbar-text').textContent   = I18n.t('playlog.checking');
-    document.getElementById('plbar-detail').textContent = '';
-  }
+  _plSources.forEach(s => { s.checking = (s.pl_id === msg.pl_id); });
+  _rebuildPlDots();
+
+  const plbarIcon = document.getElementById('plbar-icon');
+  _spinnerStart(plbarIcon);
+  document.getElementById('plbar-text').textContent =
+    I18n.t('playlog.checking_progress', { done: msg.done, total: msg.total, name: _displayName(msg.pl_name) });
+  document.getElementById('plbar-detail').textContent = '';
+}
+
+function _handlePlaylogProgress(msg) {
+  _plSources = _plSources.filter(s => s.pl_id !== msg.playlog.id);
+  msg.playlog.sources.forEach(src => {
+    _plSources.push({
+      pl_id:    msg.playlog.id,
+      pl_name:  msg.playlog.name,
+      priority: src.priority,
+      ok:       src.ok,
+      error:    src.error || '',
+      checking: false,
+    });
+  });
   _rebuildPlDots();
 }
 
@@ -1557,7 +1574,9 @@ function connectWebSocket() {
     } else if (msg.type === 'index_done') {
       _handleIndexDone(msg);
     } else if (msg.type === 'playlog_checking') {
-      _handlePlaylogChecking();
+      _handlePlaylogChecking(msg);
+    } else if (msg.type === 'playlog_progress') {
+      _handlePlaylogProgress(msg);
     } else if (msg.type === 'playlog_status') {
       _applyPlaylogStatus(msg.playlogs);
     }

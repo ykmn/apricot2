@@ -45,8 +45,13 @@
         <span class="menu-version" id="menu-ver">v…</span>
         <button class="menu-item" id="menu-about" data-i18n="menu.about">ℹ️ О веб-приложении…</button>
         <div class="menu-sep hidden" id="menu-sep-logout"></div>
-        <div class="menu-userinfo hidden" id="menu-userinfo"></div>
-        <button class="menu-item menu-item-danger hidden" id="menu-logout" data-i18n="menu.logout">🚪 Выйти</button>
+        <div class="menu-userinfo hidden" id="menu-userinfo">
+          <span class="menu-userinfo-left">
+            <span id="menu-userinfo-icon">👤</span>
+            <span id="menu-userinfo-name"></span>
+          </span>
+          <button class="menu-userinfo-logout" id="menu-logout" data-i18n="menu.logout">Выйти</button>
+        </div>
       </div>
     </div>
   </div>
