@@ -1388,17 +1388,42 @@ function _applyPlaylogStatus(playlogs) {
   }
 }
 
+// Lay out dot elements into rows of at most 50, grouped in tens with the
+// rightmost group of each row always full and any partial group leftmost.
+// Full rows of 50 come first; an incomplete remainder row (if any) is last,
+// so a row never breaks unevenly depending on available container width.
+function _layoutDotRows(dotEls) {
+  const container = document.createElement('span');
+  container.className = 'status-dots';
+
+  const n = dotEls.length;
+  const rowSizes = [];
+  for (let i = 0; i < Math.floor(n / 50); i++) rowSizes.push(50);
+  if (n % 50 > 0) rowSizes.push(n % 50);
+
+  let idx = 0;
+  rowSizes.forEach(size => {
+    const row = document.createElement('span');
+    row.className = 'status-dots-row';
+    const firstGroup = size % 10 || 10;
+    for (let i = 1; i <= size; i++) {
+      const dot = dotEls[idx++];
+      if (i === firstGroup || (i - firstGroup) % 10 === 0) dot.classList.add('group-end');
+      row.appendChild(dot);
+    }
+    container.appendChild(row);
+  });
+
+  return container;
+}
+
 function _rebuildPlDots() {
   const bar = document.getElementById('playlog-bar');
   const old = document.getElementById('plbar-dots');
   if (old) old.remove();
   if (!_plSources.length) return;
 
-  const dots = document.createElement('span');
-  dots.id = 'plbar-dots';
-  dots.className = 'status-dots';
-
-  _plSources.forEach(s => {
+  const dotEls = _plSources.map(s => {
     const dot = document.createElement('span');
     if (s.checking) dot.className = 'status-dot rescanning';
     else if (s.ok)  dot.className = 'status-dot done';
@@ -1416,9 +1441,11 @@ function _rebuildPlDots() {
         _showDiagPopover(dot, [{ name: label, error: s.error }]);
       });
     }
-    dots.appendChild(dot);
+    return dot;
   });
 
+  const dots = _layoutDotRows(dotEls);
+  dots.id = 'plbar-dots';
   bar.insertBefore(dots, document.getElementById('plbar-close'));
 }
 
@@ -1455,12 +1482,9 @@ function _rebuildDots() {
   if (old) old.remove();
   if (_statusChannels.length === 0) return;
 
-  const bar  = document.getElementById('status-bar');
-  const dots = document.createElement('span');
-  dots.id = 'status-dots';
-  dots.className = 'status-dots';
+  const bar = document.getElementById('status-bar');
 
-  _statusChannels.forEach(c => {
+  const dotEls = _statusChannels.map(c => {
     const dot = document.createElement('span');
     const empty = c.done && !c.failed && !c.rescanning && c.files === 0;
     let cls = 'status-dot';
@@ -1480,9 +1504,11 @@ function _rebuildDots() {
         _showDiagPopover(dot, [{ name: c.name, error: c.error || I18n.t('dot.files_empty') }]);
       });
     }
-    dots.appendChild(dot);
+    return dot;
   });
 
+  const dots = _layoutDotRows(dotEls);
+  dots.id = 'status-dots';
   bar.insertBefore(dots, document.getElementById('status-close'));
 }
 

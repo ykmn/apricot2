@@ -466,16 +466,20 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   font-size: 11px;
 }
 
-/* Progress dots — one per channel, filled when done */
+/* Progress dots — one per channel, filled when done.
+   Rows are split explicitly in JS (max 50/row, filled right-to-left) rather
+   than left to CSS flex-wrap, so a row never breaks unevenly depending on
+   available width. */
 .status-dots {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   flex-shrink: 0;
+}
+.status-dots-row {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
-  /* ≤50 точек в строке: 49 обычных промежутков по 4px + 4 увеличенных
-     (через каждые 10 точек) по +8px сверху */
-  max-width: calc(50 * 8px + 49 * 4px + 4 * 8px);
 }
 .status-dot {
   width: 8px;
@@ -487,7 +491,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   margin-right: 4px;
 }
 .status-dot:last-child { margin-right: 0; }
-.status-dot:nth-child(10n):not(:last-child) { margin-right: 12px; }
+.status-dot.group-end:not(:last-child) { margin-right: 12px; }
 .status-dot.done        { background: #43a047; }
 .status-dot.failed      { background: var(--danger); }
 .status-dot.empty       { background: #f0a500; }
