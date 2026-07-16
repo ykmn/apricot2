@@ -1322,17 +1322,24 @@ function _handlePlaylogChecking(msg) {
 }
 
 function _handlePlaylogProgress(msg) {
+  // Splice the updated entries back into their original position instead of
+  // appending at the end — otherwise completed playlogs keep rotating to the
+  // tail as the scan progresses, and the "checking" dot always looks leftmost.
+  const idx = _plSources.findIndex(s => s.pl_id === msg.playlog.id);
   _plSources = _plSources.filter(s => s.pl_id !== msg.playlog.id);
-  msg.playlog.sources.forEach(src => {
-    _plSources.push({
-      pl_id:    msg.playlog.id,
-      pl_name:  msg.playlog.name,
-      priority: src.priority,
-      ok:       src.ok,
-      error:    src.error || '',
-      checking: false,
-    });
-  });
+  const newEntries = msg.playlog.sources.map(src => ({
+    pl_id:    msg.playlog.id,
+    pl_name:  msg.playlog.name,
+    priority: src.priority,
+    ok:       src.ok,
+    error:    src.error || '',
+    checking: false,
+  }));
+  if (idx === -1) {
+    _plSources.push(...newEntries);
+  } else {
+    _plSources.splice(idx, 0, ...newEntries);
+  }
   _rebuildPlDots();
 }
 
