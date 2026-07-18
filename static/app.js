@@ -1860,7 +1860,7 @@ function _showUpdateModal(data) {
   if (data.up_to_date) {
     html += '<p>' + I18n.t('update.up_to_date') + '</p>';
     html += '<p class="about-version">' + I18n.t('update.local_commit',
-      { sha: data.local.sha, date: data.local.date, msg: data.local.message }) + '</p>';
+      { sha: data.local.sha, date: data.local.date, msg: _escHtml(data.local.message) }) + '</p>';
     doBtn.classList.add('hidden');
   } else {
     html += '<p>' + I18n.t('update.available') + '</p>';
