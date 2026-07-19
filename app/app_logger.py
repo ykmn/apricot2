@@ -28,25 +28,33 @@ class _DailyFileHandler(logging.Handler):
         self._open()
 
     def _open(self) -> None:
-        if self._stream:
+        today = datetime.now().strftime("%Y-%m-%d")
+        path = self.logs_dir / f"{today}.log"
+        # Open the new stream before touching the old one: if this raises
+        # (logs/ briefly unwritable — disk full, permission change), the
+        # still-open old stream and stale _current_date are left in place
+        # instead of leaving self._stream pointing at nothing, and emit()
+        # just retries the rollover on the next call.
+        new_stream = open(path, "a", encoding="utf-8")
+        old_stream, self._stream = self._stream, new_stream
+        self._current_date = today
+        if old_stream:
             try:
-                self._stream.close()
+                old_stream.close()
             except Exception:
                 pass
-        today = datetime.now().strftime("%Y-%m-%d")
-        self._current_date = today
-        path = self.logs_dir / f"{today}.log"
-        self._stream = open(path, "a", encoding="utf-8")
 
     def emit(self, record: logging.LogRecord) -> None:
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today != self._current_date:
-            self._open()
         try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            if today != self._current_date:
+                self._open()
             msg = self.format(record)
             self._stream.write(msg + "\n")
             self._stream.flush()
         except Exception:
+            # Rotation or write failure — don't let it propagate out of an
+            # arbitrary log.info()/warning() call site anywhere in the app.
             self.handleError(record)
 
     def close(self) -> None:

@@ -1032,15 +1032,34 @@ async def audio_export(body: dict) -> dict:
         fname,
     )
 
+    _broadcast_raw(json.dumps({
+        "type":       "export_progress",
+        "channel_id": channel_id,
+        "filename":   fname,
+    }))
+
     try:
         await export_audio(
             channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path, copy_mode
         )
     except Exception as exc:
         log.error("Export failed for %s: %s", channel_id, exc)
+        _broadcast_raw(json.dumps({
+            "type":       "export_error",
+            "channel_id": channel_id,
+            "filename":   fname,
+            "error":      str(exc),
+        }))
         raise HTTPException(500, str(exc))
 
-    return {"filename": fname, "download_url": f"/api/audio/download/{quote(fname)}"}
+    download_url = f"/api/audio/download/{quote(fname)}"
+    _broadcast_raw(json.dumps({
+        "type":         "export_done",
+        "channel_id":   channel_id,
+        "filename":     fname,
+        "download_url": download_url,
+    }))
+    return {"filename": fname, "download_url": download_url}
 
 
 @app.get("/api/audio/download/{filename}")

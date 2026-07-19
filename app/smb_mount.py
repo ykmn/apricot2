@@ -26,6 +26,12 @@ SUPPORTED = IS_LINUX or IS_MACOS
 # fstab-related error means mount.cifs was called without sudo (or sudoers missing)
 _FSTAB_ERR = "found in /etc/fstab"
 
+# Text sudo itself prints when the sudoers NOPASSWD entry is missing/wrong —
+# distinct from an SMB-level auth failure (e.g. "mount error(13): Permission
+# denied"), which must NOT be relabeled as a sudoers problem or the real
+# cause (wrong SMB credentials) gets hidden from whoever reads the log.
+_SUDOERS_HINTS = (_FSTAB_ERR, "a password is required", "no tty present")
+
 
 class MountResult(NamedTuple):
     host: str
@@ -50,7 +56,15 @@ def _is_mounted_linux(path: Path) -> bool:
                 if len(parts) >= 2 and parts[1] == target:
                     return True
     except OSError:
-        pass
+        # Can't verify — assume mounted rather than fail open to "not
+        # mounted". _cleanup_stale_mounts() lazily unmounts anything
+        # reported as unmounted, so returning False here on a transient
+        # read error could tear down an actively-used mount out from under
+        # connected clients. Worst case with "assume mounted" instead:
+        # mount_all() skips a re-mount that was actually needed, which
+        # surfaces as a clear "channel unreachable" error rather than
+        # silently breaking in-flight SMB access.
+        return True
     return False
 
 
@@ -259,7 +273,7 @@ def mount_all(smb_configs: list[SMBConfig]) -> list[MountResult]:
         err = _mount_linux(smb, mp) if IS_LINUX else _mount_macos(smb, mp)
 
         if err:
-            if _FSTAB_ERR in err or "sudo" in err.lower() or "password" in err.lower():
+            if any(h in err for h in _SUDOERS_HINTS) or err.lower().startswith("sudo:"):
                 needs_sudoers = True
                 err = "нет прав (sudoers)"
             results.append(MountResult(smb.host, smb.share, mp, False, err))
