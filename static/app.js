@@ -30,6 +30,7 @@ async function initAuth() {
     // but handle gracefully just in case.
     if (e.message && e.message.includes('401')) {
       location.href = '/login';
+      return;
     }
     currentUser = { auth_required: false, is_admin: true, username: null };
   }
@@ -354,13 +355,22 @@ function refreshPlaylistForVisible() {
   _playlistDebounce = setTimeout(loadPlaylist, 400);
 }
 
+let _playlistRequestId = 0;
+
 async function loadPlaylist() {
   if (!currentChannel) return;
+  // Rapid channel switches or scroll-driven refreshes can have an older
+  // request resolve after a newer one (network jitter) — only the response
+  // matching the latest request is applied, so stale data can't clobber
+  // the current channel's playlist.
+  const requestId = ++_playlistRequestId;
+  const channelId = currentChannel.id;
   const ct = Timeline.getCenterTime();
   const start = ct - 3 * 3600;
   const end   = ct + 3 * 3600;
   try {
-    const entries = await api(`/api/playlist/${currentChannel.id}?start=${start}&end=${end}`);
+    const entries = await api(`/api/playlist/${channelId}?start=${start}&end=${end}`);
+    if (requestId !== _playlistRequestId) return;
     playlistEntries = entries;
     renderPlaylist(entries);
   } catch (e) {
@@ -951,20 +961,14 @@ async function exportAll() {
 
 async function doExportItem(item) {
   try {
-    const fmt        = document.getElementById('exp-format').value;
-    const bitrate    = document.getElementById('exp-bitrate').value;
-    const samplerate = parseInt(document.getElementById('exp-samplerate').value, 10);
+    // Reuse the same body-building logic as the single-item export so bulk
+    // export picks copy_mode (lossless, no re-encode) whenever the target
+    // format matches the channel's native format — matching what the
+    // "download" button does for the identical segment.
     const result = await api('/api/audio/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channel_id:  item.channel_id,
-        start:       item.start,
-        end:         item.end,
-        format:      fmt,
-        bitrate:     fmt === 'wav' ? null : bitrate,
-        sample_rate: samplerate,
-      }),
+      body: JSON.stringify(_buildExportBody(item)),
     });
     _triggerDownload(result.download_url, result.filename);
     await new Promise(r => setTimeout(r, 500));
@@ -1588,30 +1592,52 @@ function connectWebSocket() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
 
+  ws.addEventListener('open', () => {
+    // A dropped connection may have swallowed broadcasts sent while we were
+    // offline (availability/index/playlog changes) — resync explicitly on
+    // reconnect instead of leaving the UI stale until an unrelated action
+    // happens to trigger a refetch.
+    _refreshIndexStatus().catch(() => {});
+    fetch('/api/playlog_status')
+      .then(r => r.json())
+      .then(data => { if (data.length) _applyPlaylogStatus(data); })
+      .catch(() => {});
+    if (currentChannel) {
+      Timeline.refreshAvailability();
+      loadPlaylist();
+    }
+  });
+
   ws.addEventListener('message', ev => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
-    if (msg.type === 'availability_update' && currentChannel && msg.channel_id === currentChannel.id) {
-      Timeline.addAvailability(msg.added, msg.removed);
-    } else if (msg.type === 'config_reloaded') {
-      loadStations().then(buildChannelDropdown);
-      _refreshIndexStatus().catch(() => {});
-    } else if (msg.type === 'cache_loaded') {
-      _handleCacheLoaded(msg);
-    } else if (msg.type === 'index_scanning') {
-      _handleIndexScanning(msg);
-    } else if (msg.type === 'index_progress') {
-      _handleIndexProgress(msg);
-    } else if (msg.type === 'index_error') {
-      _handleIndexError(msg);
-    } else if (msg.type === 'index_done') {
-      _handleIndexDone(msg);
-    } else if (msg.type === 'playlog_checking') {
-      _handlePlaylogChecking(msg);
-    } else if (msg.type === 'playlog_progress') {
-      _handlePlaylogProgress(msg);
-    } else if (msg.type === 'playlog_status') {
-      _applyPlaylogStatus(msg.playlogs);
+    try {
+      if (msg.type === 'availability_update' && currentChannel && msg.channel_id === currentChannel.id) {
+        Timeline.addAvailability(msg.added || [], msg.removed || []);
+      } else if (msg.type === 'config_reloaded') {
+        loadStations().then(buildChannelDropdown);
+        _refreshIndexStatus().catch(() => {});
+      } else if (msg.type === 'cache_loaded') {
+        _handleCacheLoaded(msg);
+      } else if (msg.type === 'index_scanning') {
+        _handleIndexScanning(msg);
+      } else if (msg.type === 'index_progress') {
+        _handleIndexProgress(msg);
+      } else if (msg.type === 'index_error') {
+        _handleIndexError(msg);
+      } else if (msg.type === 'index_done') {
+        _handleIndexDone(msg);
+      } else if (msg.type === 'playlog_checking') {
+        _handlePlaylogChecking(msg);
+      } else if (msg.type === 'playlog_progress') {
+        _handlePlaylogProgress(msg);
+      } else if (msg.type === 'playlog_status') {
+        _applyPlaylogStatus(msg.playlogs);
+      }
+    } catch (e) {
+      // Malformed or unexpected-shape message — drop this one update instead
+      // of letting it propagate as an uncaught error.
+      console.error('WS message handling failed', msg, e);
     }
   });
 
@@ -1860,7 +1886,7 @@ function _showUpdateModal(data) {
   if (data.up_to_date) {
     html += '<p>' + I18n.t('update.up_to_date') + '</p>';
     html += '<p class="about-version">' + I18n.t('update.local_commit',
-      { sha: data.local.sha, date: data.local.date, msg: data.local.message }) + '</p>';
+      { sha: data.local.sha, date: data.local.date, msg: _escHtml(data.local.message) }) + '</p>';
     doBtn.classList.add('hidden');
   } else {
     html += '<p>' + I18n.t('update.available') + '</p>';
@@ -1900,7 +1926,8 @@ function _showUpdateModal(data) {
 }
 
 function _escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function _fmtTs(ts) {

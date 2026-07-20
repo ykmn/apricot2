@@ -10,6 +10,7 @@ Startup sequence:
 from __future__ import annotations
 
 import asyncio
+import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
@@ -99,27 +100,35 @@ class ChannelIndex:
         self.channel = channel
         self._files: SortedList[AudioFile] = SortedList(key=lambda f: f.start_dt)
         self._paths: set[str] = set()
+        # Guards _files/_paths: refresh() mutates them from a worker thread
+        # (poll loop / manual rescan, both via run_in_executor) while queries
+        # below run on the event loop thread — SortedList gives no thread
+        # safety of its own. Hold times are short (in-memory list ops only,
+        # no I/O), so a plain lock is fine even when acquired from async code.
+        self._lock = threading.Lock()
 
     # ── Query ──────────────────────────────────────────────────────────────
 
     def get_intervals(self, start: datetime, end: datetime) -> list[dict]:
         result = []
-        for af in self._files:
-            if af.end_dt <= start:
-                continue
-            if af.start_dt >= end:
-                break
-            result.append({"start": af.start_dt.timestamp(), "end": af.end_dt.timestamp()})
+        with self._lock:
+            for af in self._files:
+                if af.end_dt <= start:
+                    continue
+                if af.start_dt >= end:
+                    break
+                result.append({"start": af.start_dt.timestamp(), "end": af.end_dt.timestamp()})
         return result
 
     def files_for_range(self, start: datetime, end: datetime) -> list[AudioFile]:
         result = []
-        for af in self._files:
-            if af.end_dt <= start:
-                continue
-            if af.start_dt >= end:
-                break
-            result.append(af)
+        with self._lock:
+            for af in self._files:
+                if af.end_dt <= start:
+                    continue
+                if af.start_dt >= end:
+                    break
+                result.append(af)
         return result
 
     # ── Scan ───────────────────────────────────────────────────────────────
@@ -197,35 +206,41 @@ class ChannelIndex:
         if scan_error is not None:
             raise scan_error
 
-        new_paths     = set(current.keys())
-        added_keys    = new_paths - self._paths
-        removed_keys  = self._paths - new_paths
+        # Diffing and mutating against self._paths/_files must be atomic
+        # relative to other threads: a concurrent refresh() (poll loop vs.
+        # manual rescan both run via run_in_executor) or a query reading
+        # mid-update would otherwise see an inconsistent snapshot.
+        with self._lock:
+            new_paths     = set(current.keys())
+            added_keys    = new_paths - self._paths
+            removed_keys  = self._paths - new_paths
 
-        # Also detect files whose duration changed (e.g. still being recorded
-        # when first scanned — captured with a partial size).
-        changed_keys: set[str] = set()
-        if self._files:
-            existing: dict[str, AudioFile] = {af.rel_path: af for af in self._files}
-            for key in new_paths & self._paths:
-                old_af = existing.get(key)
-                if old_af and current[key].end_dt != old_af.end_dt:
-                    changed_keys.add(key)
+            # Also detect files whose duration changed (e.g. still being
+            # recorded when first scanned — captured with a partial size).
+            changed_keys: set[str] = set()
+            if self._files:
+                existing: dict[str, AudioFile] = {af.rel_path: af for af in self._files}
+                for key in new_paths & self._paths:
+                    old_af = existing.get(key)
+                    if old_af and current[key].end_dt != old_af.end_dt:
+                        changed_keys.add(key)
 
-        added   = [current[k] for k in added_keys | changed_keys]
-        removed = [af for af in self._files
-                   if af.rel_path in removed_keys or af.rel_path in changed_keys]
+            added   = [current[k] for k in added_keys | changed_keys]
+            removed = [af for af in self._files
+                       if af.rel_path in removed_keys or af.rel_path in changed_keys]
 
-        for af in removed:
-            self._files.remove(af)
-        for af in added:
-            self._files.add(af)
-        self._paths = new_paths
+            for af in removed:
+                self._files.remove(af)
+            for af in added:
+                self._files.add(af)
+            self._paths = new_paths
         return added, removed
 
     def clear(self) -> None:
         """Wipe the index (called when bitrate changes invalidate all durations)."""
-        self._files.clear()
-        self._paths.clear()
+        with self._lock:
+            self._files.clear()
+            self._paths.clear()
 
 
 # ── Error helpers ─────────────────────────────────────────────────────────────
@@ -563,6 +578,11 @@ class FileIndexManager:
                         self._conn_failed.add(ch_id)
 
     def start_polling(self) -> None:
+        # /api/reload calls setup() + start_polling() again without a process
+        # restart — cancel the previous poll loop so reloads don't accumulate
+        # concurrent loops all mutating the same _indexes.
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
         self._task = asyncio.create_task(self._poll_loop())
 
 

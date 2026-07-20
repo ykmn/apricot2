@@ -272,16 +272,28 @@ async def _log_requests(request: Request, call_next):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+_background_tasks: list[asyncio.Task] = []
+
+
 async def _background_startup() -> None:
+    global _background_tasks
+    # Each call to this (startup, and every /api/reload) starts a fresh set
+    # of loop tasks — cancel whatever this same function started previously
+    # so reload doesn't accumulate duplicate poll/preload/refresh loops.
+    for t in _background_tasks:
+        if not t.done():
+            t.cancel()
+    _background_tasks = []
+
     try:
         await file_index.initial_scan(progress=_progress_callback,
                                        force_full=rescan_all_on_startup)
     except Exception as exc:
         log.error("Initial scan failed: %s", exc)
     file_index.start_polling()
-    asyncio.create_task(_export_cleanup_loop())
-    asyncio.create_task(_preload_playlogs())
-    asyncio.create_task(_playlog_today_refresh_loop())
+    _background_tasks.append(asyncio.create_task(_export_cleanup_loop()))
+    _background_tasks.append(asyncio.create_task(_preload_playlogs()))
+    _background_tasks.append(asyncio.create_task(_playlog_today_refresh_loop()))
 
 
 async def _preload_playlogs() -> None:
@@ -372,18 +384,46 @@ async def login_page() -> HTMLResponse:
     return _html_response("login.html")
 
 
+# In-memory per-IP login throttle — bounds brute-force/spray attempts against
+# local and LDAP accounts. Keyed by client IP rather than username so a single
+# attacker can't get around it by rotating target usernames.
+_login_attempts: dict[str, list[float]] = {}
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 60
+
+
+def _login_rate_limited(key: str) -> bool:
+    now = time.time()
+    attempts = [t for t in _login_attempts.get(key, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    if attempts:
+        _login_attempts[key] = attempts
+    else:
+        _login_attempts.pop(key, None)
+    return len(attempts) >= _LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_failure(key: str) -> None:
+    _login_attempts.setdefault(key, []).append(time.time())
+
+
 @app.post("/api/auth/login")
 async def api_login(request: Request) -> JSONResponse:
     data     = await request.json()
     username = str(data.get("username", "")).strip()
     password = str(data.get("password", ""))
+    client_ip = request.client.host if request.client else "unknown"
 
     if not username:
         raise HTTPException(status_code=400, detail="Введите имя пользователя")
 
+    if _login_rate_limited(client_ip):
+        log.warning("Login rate-limited: ip=%s", client_ip)
+        raise HTTPException(status_code=429, detail="Слишком много попыток входа. Подождите минуту.")
+
     try:
         user = _auth.authenticate(username, password)
     except _auth.AuthError as exc:
+        _record_login_failure(client_ip)
         log.warning(
             "Login failed: user=%s ip=%s reason=%s",
             username,
@@ -396,11 +436,11 @@ async def api_login(request: Request) -> JSONResponse:
         raise HTTPException(status_code=503, detail=str(exc))
 
     if not user:
+        _record_login_failure(client_ip)
         log.warning("Login failed: user=%s ip=%s reason=no user returned", username,
                     request.client.host if request.client else "—")
         raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
 
-    client_ip = request.client.host if request.client else ""
     token = _auth.create_session(user["username"], user["is_admin"], user["auth_type"], user.get("domain", ""), client_ip)
     log.info(
         "Login: user=%s auth=%s domain=%s admin=%s ip=%s",
@@ -516,8 +556,9 @@ async def get_version() -> dict:
 
 
 @app.post("/api/rescan_playlogs/{channel_id}")
-async def rescan_playlogs(channel_id: str) -> dict:
+async def rescan_playlogs(channel_id: str, request: Request) -> dict:
     """Clear recent playlog cache for the channel's station and recheck all sources."""
+    _require_admin(request)
     channel = channels_map.get(channel_id)
     if channel is None:
         raise HTTPException(404, f"Channel {channel_id!r} not found")
@@ -554,8 +595,9 @@ async def get_index_status() -> dict:
 
 
 @app.post("/api/rescan/{channel_id}")
-async def rescan_channel(channel_id: str) -> dict:
+async def rescan_channel(channel_id: str, request: Request) -> dict:
     """Force a rescan of one channel and broadcast the result."""
+    _require_admin(request)
     idx = file_index.get_index(channel_id)
     if idx is None:
         raise HTTPException(404, f"Channel {channel_id!r} not found")
@@ -703,26 +745,34 @@ async def check_updates(request: Request) -> dict:
     owner_repo = m.group(1)
 
     # Local HEAD
-    try:
-        local_sha = subprocess.check_output(
+    def _local_git_info() -> tuple[str, str, str]:
+        sha = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
         ).strip()
-        local_date = subprocess.check_output(
+        date_ = subprocess.check_output(
             ["git", "log", "-1", "--format=%ci"], stderr=subprocess.DEVNULL, text=True
         ).strip()
-        local_msg = subprocess.check_output(
+        msg = subprocess.check_output(
             ["git", "log", "-1", "--format=%s"], stderr=subprocess.DEVNULL, text=True
         ).strip()
+        return sha, date_, msg
+
+    try:
+        local_sha, local_date, local_msg = await asyncio.to_thread(_local_git_info)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"git error: {exc}")
 
     # Remote HEAD via GitHub API
     api_url = f"https://api.github.com/repos/{owner_repo}/commits/HEAD"
-    try:
+
+    def _fetch_remote() -> dict:
         req = urllib.request.Request(api_url, headers={"Accept": "application/vnd.github+json",
                                                         "User-Agent": f"Apricot2/{VERSION}"})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            remote_data = json.loads(resp.read().decode())
+            return json.loads(resp.read().decode())
+
+    try:
+        remote_data = await asyncio.to_thread(_fetch_remote)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}")
 
@@ -743,11 +793,15 @@ async def update_server(request: Request) -> dict:
     """Run git pull, then restart the server."""
     _require_admin(request)
     log.info("Server update (git pull) requested")
-    try:
-        result = subprocess.run(
+
+    def _git_pull() -> subprocess.CompletedProcess:
+        return subprocess.run(
             ["git", "pull"],
             capture_output=True, text=True, timeout=60
         )
+
+    try:
+        result = await asyncio.to_thread(_git_pull)
         output = (result.stdout + result.stderr).strip()
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"git pull failed: {output}")
@@ -869,7 +923,7 @@ async def get_playlist(
         pl_cfg = playlists_map.get(pl_id)
         if pl_cfg is None:
             continue
-        for e in get_entries(pl_cfg, start_dt, end_dt):
+        for e in await asyncio.to_thread(get_entries, pl_cfg, start_dt, end_dt):
             cl_colors = pl_cfg.class_colors
             cl_names  = pl_cfg.class_names
             entries.append({
@@ -978,15 +1032,34 @@ async def audio_export(body: dict) -> dict:
         fname,
     )
 
+    _broadcast_raw(json.dumps({
+        "type":       "export_progress",
+        "channel_id": channel_id,
+        "filename":   fname,
+    }))
+
     try:
         await export_audio(
             channel_cfg, start_dt, end_dt, fmt, bitrate, sample_rate, out_path, copy_mode
         )
     except Exception as exc:
         log.error("Export failed for %s: %s", channel_id, exc)
+        _broadcast_raw(json.dumps({
+            "type":       "export_error",
+            "channel_id": channel_id,
+            "filename":   fname,
+            "error":      str(exc),
+        }))
         raise HTTPException(500, str(exc))
 
-    return {"filename": fname, "download_url": f"/api/audio/download/{quote(fname)}"}
+    download_url = f"/api/audio/download/{quote(fname)}"
+    _broadcast_raw(json.dumps({
+        "type":         "export_done",
+        "channel_id":   channel_id,
+        "filename":     fname,
+        "download_url": download_url,
+    }))
+    return {"filename": fname, "download_url": download_url}
 
 
 @app.get("/api/audio/download/{filename}")
@@ -1006,6 +1079,14 @@ async def audio_download(filename: str) -> FileResponse:
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
+    # Starlette's @app.middleware("http") only runs for ASGI scope "http" —
+    # it never sees websocket upgrades, so auth must be checked here explicitly.
+    if _auth.auth_required():
+        token = ws.cookies.get(_auth.COOKIE_NAME)
+        session = _auth.get_session(token) if token else None
+        if not session:
+            await ws.close(code=4401)
+            return
     await ws.accept()
     ws_clients.add(ws)
     log.debug("WebSocket connected (total: %d)", len(ws_clients))

@@ -304,7 +304,13 @@ def _check_local_password(entry: dict, password: str) -> bool:
         return _verify_pbkdf2(pbkdf2_hash, password, entry.get("username"))
 
     # 2. Plaintext fallback ───────────────────────────────────────────────────
-    return hmac.compare_digest(str(entry.get("password", "")), password)
+    # Fail closed when no password is configured at all — otherwise
+    # compare_digest("", "") is True and an empty submitted password would
+    # authenticate as this user.
+    stored = entry.get("password")
+    if not stored:
+        return False
+    return hmac.compare_digest(str(stored), password)
 
 
 # ── LDAP helpers ──────────────────────────────────────────────────────────────
@@ -758,15 +764,14 @@ def authenticate(username: str, password: str) -> Optional[dict]:
                     "is_admin":  bool(local_entry.get("is_admin", False)),
                     "auth_type": "local",
                 }
-            # Username found locally but password wrong — don't fall through to AD
-            raise AuthError("Неверный пароль.")
+            # Username found locally but password wrong — don't fall through to AD.
+            # Message is identical to the "not found" case below so a failed
+            # login response can't be used to enumerate valid local usernames.
+            raise AuthError("Неверное имя пользователя или пароль.")
 
     # 2. LDAP: username not in local list (or Local disabled) ─────────────────
     if cfg.get("LDAP"):
         return _authenticate_ldap(username, password, cfg)
 
     # Username not found anywhere
-    raise AuthError(
-        f"Пользователь «{username}» не найден.\n"
-        f"Проверьте имя пользователя или обратитесь к администратору."
-    )
+    raise AuthError("Неверное имя пользователя или пароль.")

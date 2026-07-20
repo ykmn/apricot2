@@ -400,12 +400,20 @@ async def _pipe_smb_segment(
             cmd += ["-acodec", "libmp3lame", "-b:a", bitrate, "-f", "mp3"]
     cmd += ["pipe:1"]
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as exc:
+        # feed_stdin()'s finally normally closes fh once the subprocess is
+        # running — if spawning ffmpeg itself fails (missing binary, EMFILE),
+        # that never runs, so the SMB handle must be closed here instead.
+        log.error("pipe subprocess spawn failed %s: %s", rel, exc)
+        await loop.run_in_executor(None, fh.close)
+        return
 
     async def feed_stdin() -> None:
         try:
@@ -921,6 +929,14 @@ async def export_audio(
             stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
             # Keep only last 10 lines — ffmpeg outputs a lot of progress info
             last_lines = "\n".join(stderr_text.splitlines()[-10:])
+            # ffmpeg writes directly to out_path — on failure, don't leave a
+            # partial/corrupt file sitting in EXPORT_DIR (reachable via
+            # /api/audio/download/{filename} if the name is guessed) until
+            # the next retention sweep.
+            try:
+                Path(out_path).unlink(missing_ok=True)
+            except OSError:
+                pass
             raise RuntimeError(f"ffmpeg exited with code {proc.returncode}:\n{last_lines}")
 
     return out_path
