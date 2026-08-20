@@ -139,7 +139,17 @@
     "error": "Ошибка экспорта: {msg}",
     "all_progress": "⬇ Экспорт {n} / {total}…",
     "all_done": "✓ Экспорт завершён ({total})",
-    "all_errors": "⚠ Экспорт: {ok} из {total} — ошибки: {failed}"
+    "all_errors": "⚠ Экспорт: {ok} из {total} — ошибки: {failed}",
+    "all_title": "Экспорт выбранных фрагментов",
+    "merge_mode_separate": "Скачать отдельными файлами",
+    "merge_mode_merge": "Склеить фрагменты в один файл",
+    "merge_order_label": "Порядок склейки:",
+    "merge_order_chrono": "По времени начала фрагмента",
+    "merge_order_list": "Как в списке «Выбранные фрагменты»",
+    "merge_aac_warning": "⚠ Для AAC маркеры невозможны технически — файл будет склеен без меток",
+    "merge_progress": "⬇ Склейка фрагментов…",
+    "merge_done": "✓ Склейка готова! Скачивание…",
+    "merge_error": "Ошибка склейки: {msg}"
   },
   "calendar": {
     "day_0": "воскресенье",

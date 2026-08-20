@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,10 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
+
+import mutagen.aac
+import mutagen.mp3
+import mutagen.wave
 
 from . import smb_client as smb
 from .app_logger import get_logger
@@ -824,6 +829,7 @@ async def export_audio(
     sample_rate: int | None = None,
     out_path: str | None = None,
     copy_mode: bool = False,
+    allow_copy_mode: bool = True,
 ) -> str:
     """Export audio segment directly to a file via ffmpeg.
 
@@ -858,7 +864,7 @@ async def export_audio(
         last_file_duration = (end - last_file.start_dt).total_seconds()
 
         native_ext = channel.file_extension.lower()
-        if not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
+        if allow_copy_mode and not copy_mode and out_format == native_ext and native_ext in ("mp3", "aac"):
             copy_mode = True
 
         # Fragments are recorded intermittently — fill any real time gap
@@ -938,6 +944,181 @@ async def export_audio(
             except OSError:
                 pass
             raise RuntimeError(f"ffmpeg exited with code {proc.returncode}:\n{last_lines}")
+
+    return out_path
+
+
+def _format_chapter_title(dt: datetime) -> str:
+    """Chapter/marker title — matches the fragment timestamp format already
+    shown in the log-list panel (see static/app.js's `fmt` helper)."""
+    return dt.strftime("%d.%m.%Y %H:%M:%S")
+
+
+def _build_chapters_metadata(chapters: list[tuple[float, float, str]]) -> str:
+    """Build an ffmpeg ;FFMETADATA1 chapters file.
+
+    chapters: (start_seconds, end_seconds, title) tuples in playback order.
+    Special characters ffmpeg's metadata parser treats specially (\\, =, ;,
+    #, newline) are escaped per its documented metadata format.
+    """
+    lines = [";FFMETADATA1"]
+    for start_s, end_s, title in chapters:
+        safe_title = (
+            title.replace("\\", "\\\\")
+                 .replace("=", "\\=")
+                 .replace(";", "\\;")
+                 .replace("#", "\\#")
+                 .replace("\n", " ")
+        )
+        lines.append("[CHAPTER]")
+        lines.append("TIMEBASE=1/1000")
+        lines.append(f"START={int(round(start_s * 1000))}")
+        lines.append(f"END={int(round(end_s * 1000))}")
+        lines.append(f"title={safe_title}")
+    return "\n".join(lines) + "\n"
+
+
+def _write_wav_markers(path: str, markers: list[tuple[int, str]]) -> None:
+    """Append RIFF cue points + LIST/adtl/labl labels to a PCM WAV file.
+
+    ffmpeg's WAV muxer accepts -map_chapters but silently drops them from
+    the written file (verified: ffprobe shows nothing after such a mux).
+    This writes the same 'cue '/'LIST'/'adtl'/'labl' chunk layout Sound
+    Forge/Audition produce — ffmpeg's own WAV *demuxer* already parses that
+    layout back as chapters, so it's the reliable path for WAV markers.
+
+    markers: (sample_position, title) tuples in order.
+    """
+    if not markers:
+        return
+    with open(path, "r+b") as f:
+        header = f.read(12)
+        if header[:4] != b"RIFF" or header[8:12] != b"WAVE":
+            raise RuntimeError(f"Not a RIFF/WAVE file: {path}")
+        riff_size = struct.unpack_from("<I", header, 4)[0]
+
+        cue_body = struct.pack("<I", len(markers))
+        for i, (pos, _title) in enumerate(markers, start=1):
+            cue_body += struct.pack("<II4sIII", i, pos, b"data", 0, 0, pos)
+        cue_chunk = b"cue " + struct.pack("<I", len(cue_body)) + cue_body
+        if len(cue_body) % 2:
+            cue_chunk += b"\x00"
+
+        adtl_body = b"adtl"
+        for i, (_pos, title) in enumerate(markers, start=1):
+            text = title.encode("utf-8", errors="replace") + b"\x00"
+            labl_body = struct.pack("<I", i) + text
+            labl_chunk = b"labl" + struct.pack("<I", len(labl_body)) + labl_body
+            if len(labl_body) % 2:
+                labl_chunk += b"\x00"
+            adtl_body += labl_chunk
+        list_chunk = b"LIST" + struct.pack("<I", len(adtl_body)) + adtl_body
+        if len(adtl_body) % 2:
+            list_chunk += b"\x00"
+
+        appended = cue_chunk + list_chunk
+        f.seek(0, 2)
+        f.write(appended)
+        f.seek(4)
+        f.write(struct.pack("<I", riff_size + len(appended)))
+
+
+def _probe_duration(path: str, out_format: str) -> float:
+    """Read a just-encoded fragment's real duration in seconds via mutagen —
+    used instead of the requested (end - start) to avoid marker-position
+    drift from trim/encode rounding."""
+    if out_format == "wav":
+        audio = mutagen.wave.WAVE(path)
+    elif out_format == "aac":
+        audio = mutagen.aac.AAC(path)
+    else:
+        audio = mutagen.mp3.MP3(path)
+    return float(audio.info.length)
+
+
+async def export_audio_merged(
+    items: list[tuple[ChannelConfig, datetime, datetime]],
+    out_format: str,
+    bitrate: str,
+    sample_rate: int | None,
+    out_path: str,
+) -> str:
+    """Export multiple (possibly cross-channel) fragments concatenated into
+    a single file, with a marker at each fragment boundary titled by that
+    fragment's original start date-time.
+
+    Every fragment is always transcoded to the requested format/bitrate/
+    sample_rate (export_audio(..., allow_copy_mode=False)) so fragments
+    from different channels/native formats concatenate safely.
+    """
+    if not items:
+        raise RuntimeError("No items to merge")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        seg_paths: list[str] = []
+        for i, (channel, start, end) in enumerate(items):
+            seg_path = str(Path(tmpdir) / f"part_{i:04d}.{out_format}")
+            await export_audio(
+                channel, start, end, out_format, bitrate, sample_rate,
+                out_path=seg_path, copy_mode=False, allow_copy_mode=False,
+            )
+            seg_paths.append(seg_path)
+
+        durations = [_probe_duration(p, out_format) for p in seg_paths]
+
+        concat_list = Path(tmpdir) / "merge_concat.txt"
+        with concat_list.open("w", encoding="utf-8") as f:
+            f.write("ffconcat version 1.0\n")
+            for p in seg_paths:
+                safe_p = p.replace("\\", "/").replace("'", "\\'")
+                f.write(f"file '{safe_p}'\n")
+
+        if out_format == "mp3":
+            cumulative = 0.0
+            chapters = []
+            for (_channel, start, _end), dur in zip(items, durations):
+                chapters.append((cumulative, cumulative + dur, _format_chapter_title(start)))
+                cumulative += dur
+            chapters_path = Path(tmpdir) / "chapters.txt"
+            chapters_path.write_text(_build_chapters_metadata(chapters), encoding="utf-8")
+
+            cmd = [
+                FFMPEG, "-y",
+                "-f", "concat", "-safe", "0", "-i", str(concat_list),
+                "-i", str(chapters_path),
+                "-map_metadata", "1", "-map_chapters", "1",
+                "-c", "copy", "-id3v2_version", "3", "-write_id3v2", "1",
+                out_path,
+            ]
+        else:
+            cmd = [
+                FFMPEG, "-y",
+                "-f", "concat", "-safe", "0", "-i", str(concat_list),
+                "-c", "copy",
+                out_path,
+            ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await proc.communicate()
+        if proc.returncode != 0:
+            stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+            last_lines = "\n".join(stderr_text.splitlines()[-10:])
+            try:
+                Path(out_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise RuntimeError(f"ffmpeg exited with code {proc.returncode}:\n{last_lines}")
+
+        if out_format == "wav":
+            sr = sample_rate or items[0][0].sample_rate or 44100
+            cumulative = 0.0
+            markers = []
+            for (_channel, start, _end), dur in zip(items, durations):
+                markers.append((int(round(cumulative * sr)), _format_chapter_title(start)))
+                cumulative += dur
+            _write_wav_markers(out_path, markers)
 
     return out_path
 

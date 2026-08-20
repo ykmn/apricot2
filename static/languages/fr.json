@@ -139,7 +139,17 @@
     "error": "Erreur d'export : {msg}",
     "all_progress": "⬇ Export {n} / {total}…",
     "all_done": "✓ Export terminé ({total})",
-    "all_errors": "⚠ Export : {ok} sur {total} — erreurs : {failed}"
+    "all_errors": "⚠ Export : {ok} sur {total} — erreurs : {failed}",
+    "all_title": "Exporter les fragments sélectionnés",
+    "merge_mode_separate": "Télécharger des fichiers séparés",
+    "merge_mode_merge": "Fusionner les fragments en un seul fichier",
+    "merge_order_label": "Ordre de fusion :",
+    "merge_order_chrono": "Par heure de début du fragment",
+    "merge_order_list": "Comme dans la liste « Fragments sélectionnés »",
+    "merge_aac_warning": "⚠ Les marqueurs sont techniquement impossibles en AAC — le fichier sera fusionné sans eux",
+    "merge_progress": "⬇ Fusion des fragments…",
+    "merge_done": "✓ Fusion terminée ! Téléchargement…",
+    "merge_error": "Erreur de fusion : {msg}"
   },
   "calendar": {
     "day_0": "dimanche",
