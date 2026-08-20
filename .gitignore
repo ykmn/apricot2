@@ -56,3 +56,6 @@ cache_playlogs/*
 mounts/
 
 std*.txt
+
+# Superpowers brainstorming companion (local session mockups)
+.superpowers/
