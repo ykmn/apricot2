@@ -139,7 +139,17 @@
     "error": "Export error: {msg}",
     "all_progress": "⬇ Exporting {n} / {total}…",
     "all_done": "✓ Export complete ({total})",
-    "all_errors": "⚠ Export: {ok} of {total} — errors: {failed}"
+    "all_errors": "⚠ Export: {ok} of {total} — errors: {failed}",
+    "all_title": "Export selected fragments",
+    "merge_mode_separate": "Download as separate files",
+    "merge_mode_merge": "Merge fragments into one file",
+    "merge_order_label": "Merge order:",
+    "merge_order_chrono": "By fragment start time",
+    "merge_order_list": "As listed in \"Selected fragments\"",
+    "merge_aac_warning": "⚠ Chapter markers are not possible for AAC — the file will be merged without them",
+    "merge_progress": "⬇ Merging fragments…",
+    "merge_done": "✓ Merge complete! Downloading…",
+    "merge_error": "Merge error: {msg}"
   },
   "calendar": {
     "day_0": "Sunday",

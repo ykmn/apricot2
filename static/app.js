@@ -110,6 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initLogList();
   renderLogList();
   initExportModal();
+  initExportAllModal();
   initClockControls();
   initMobClock();
   initMobileTabs();
@@ -738,7 +739,7 @@ function initLogList() {
     _saveLogItems();
     renderLogList();
   });
-  document.getElementById('btn-export-all').addEventListener('click', exportAll);
+  document.getElementById('btn-export-all').addEventListener('click', openExportAllModal);
 }
 
 function addLogItem(item) {
@@ -911,17 +912,13 @@ function openExportModal(item) {
   document.getElementById('export-modal').classList.remove('hidden');
 }
 
-function _isCopyMode(item) {
-  const ch  = _getChannelById(item.channel_id);
-  const fmt = document.getElementById('exp-format').value;
+function _isCopyMode(item, fmt) {
+  const ch = _getChannelById(item.channel_id);
   return !!(ch && ch.file_extension.toLowerCase() === fmt);
 }
 
-function _buildExportBody(item) {
-  const fmt        = document.getElementById('exp-format').value;
-  const bitrate    = document.getElementById('exp-bitrate').value;
-  const samplerate = parseInt(document.getElementById('exp-samplerate').value, 10);
-  const copyMode   = _isCopyMode(item);
+function _buildExportBody(item, fmt, bitrate, samplerate) {
+  const copyMode = _isCopyMode(item, fmt);
   return {
     channel_id:  item.channel_id,
     start:       item.start,
@@ -938,11 +935,14 @@ async function doExport() {
   const prog = document.getElementById('export-progress');
   prog.classList.remove('hidden');
   prog.textContent = I18n.t('export.in_progress');
+  const fmt        = document.getElementById('exp-format').value;
+  const bitrate    = document.getElementById('exp-bitrate').value;
+  const samplerate = parseInt(document.getElementById('exp-samplerate').value, 10);
   try {
     const result = await api('/api/audio/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(_buildExportBody(exportTarget)),
+      body: JSON.stringify(_buildExportBody(exportTarget, fmt, bitrate, samplerate)),
     });
     prog.textContent = I18n.t('export.done');
     _triggerDownload(result.download_url, result.filename);
@@ -952,15 +952,107 @@ async function doExport() {
   }
 }
 
-async function exportAll() {
+// ── Export-all modal ───────────────────────────────────────────────────────
+function _expAllMode() {
+  return document.getElementById('expall-mode-merge').checked ? 'merge' : 'separate';
+}
+
+function _expAllSingleChannel() {
+  if (logItems.length === 0) return null;
+  const firstId = logItems[0].channel_id;
+  if (!logItems.every(i => i.channel_id === firstId)) return null;
+  return _getChannelById(firstId);
+}
+
+function initExportAllModal() {
+  document.getElementById('expall-cancel').addEventListener('click', () => {
+    document.getElementById('export-all-modal').classList.add('hidden');
+  });
+  document.getElementById('expall-ok').addEventListener('click', doExportAll);
+  document.getElementById('expall-format').addEventListener('change', _updateExportAllFields);
+  document.getElementById('expall-mode-separate').addEventListener('change', _updateExportAllFields);
+  document.getElementById('expall-mode-merge').addEventListener('change', _updateExportAllFields);
+}
+
+function _updateExportAllFields() {
+  const fmt        = document.getElementById('expall-format').value;
+  const mode       = _expAllMode();
+  const bitrateRow = document.getElementById('expall-bitrate-row');
+  const wavNote    = document.getElementById('expall-wav-note');
+  const copyNote   = document.getElementById('expall-copy-note');
+  const orderBlock = document.getElementById('expall-order-block');
+  const aacWarning = document.getElementById('expall-aac-warning');
+  const srSel      = document.getElementById('expall-samplerate');
+  const brSel      = document.getElementById('expall-bitrate');
+
+  if (fmt === 'wav') {
+    bitrateRow.classList.add('hidden');
+    wavNote.classList.remove('hidden');
+  } else {
+    bitrateRow.classList.remove('hidden');
+    wavNote.classList.add('hidden');
+  }
+
+  orderBlock.classList.toggle('hidden', mode !== 'merge');
+  aacWarning.classList.toggle('hidden', !(mode === 'merge' && fmt === 'aac'));
+
+  const singleChannel = _expAllSingleChannel();
+  const isCopy = mode === 'separate' && !!singleChannel && singleChannel.file_extension.toLowerCase() === fmt;
+  copyNote.classList.toggle('hidden', !isCopy);
+  srSel.disabled = isCopy;
+  brSel.disabled = isCopy;
+}
+
+function openExportAllModal() {
   if (logItems.length === 0) return;
+  document.getElementById('expall-mode-separate').checked = true;
+
+  const ch     = _expAllSingleChannel();
+  const fmtSel = document.getElementById('expall-format');
+  const srSel  = document.getElementById('expall-samplerate');
+  const brSel  = document.getElementById('expall-bitrate');
+  if (ch) {
+    const fmtMap = { mp3: 'mp3', wav: 'wav', aac: 'aac' };
+    const ext = ch.file_extension.toLowerCase();
+    if (fmtMap[ext]) fmtSel.value = fmtMap[ext];
+    const srOpt = [...srSel.options].find(o => parseInt(o.value) === ch.sample_rate);
+    if (srOpt) srSel.value = srOpt.value;
+    if (ch.bitrate) {
+      const brOpt = [...brSel.options].find(o => o.value === ch.bitrate);
+      if (brOpt) brSel.value = brOpt.value;
+    }
+  } else {
+    fmtSel.value = 'mp3';
+    srSel.value = '44100';
+    brSel.value = '192k';
+  }
+
+  _updateExportAllFields();
+  document.getElementById('export-all-modal').classList.remove('hidden');
+}
+
+async function doExportAll() {
+  const mode = _expAllMode();
+  document.getElementById('export-all-modal').classList.add('hidden');
+  if (mode === 'merge') {
+    await doExportMerge();
+  } else {
+    await exportAllSeparate();
+  }
+}
+
+async function exportAllSeparate() {
+  if (logItems.length === 0) return;
+  const fmt        = document.getElementById('expall-format').value;
+  const bitrate    = document.getElementById('expall-bitrate').value;
+  const samplerate = parseInt(document.getElementById('expall-samplerate').value, 10);
   const total = logItems.length;
   const el = document.getElementById('play-loading');
   let failed = 0;
   for (let i = 0; i < total; i++) {
     el.textContent = I18n.t('export.all_progress', { n: i + 1, total });
     el.classList.remove('hidden');
-    const ok = await doExportItem(logItems[i]);
+    const ok = await doExportItem(logItems[i], fmt, bitrate, samplerate);
     if (!ok) failed++;
   }
   el.textContent = failed
@@ -969,16 +1061,12 @@ async function exportAll() {
   setTimeout(() => el.classList.add('hidden'), 3000);
 }
 
-async function doExportItem(item) {
+async function doExportItem(item, fmt, bitrate, samplerate) {
   try {
-    // Reuse the same body-building logic as the single-item export so bulk
-    // export picks copy_mode (lossless, no re-encode) whenever the target
-    // format matches the channel's native format — matching what the
-    // "download" button does for the identical segment.
     const result = await api('/api/audio/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(_buildExportBody(item)),
+      body: JSON.stringify(_buildExportBody(item, fmt, bitrate, samplerate)),
     });
     _triggerDownload(result.download_url, result.filename);
     await new Promise(r => setTimeout(r, 500));
@@ -986,6 +1074,39 @@ async function doExportItem(item) {
   } catch (e) {
     console.error('Export failed for', item, e);
     return false;
+  }
+}
+
+async function doExportMerge() {
+  const fmt         = document.getElementById('expall-format').value;
+  const bitrate      = document.getElementById('expall-bitrate').value;
+  const samplerate   = parseInt(document.getElementById('expall-samplerate').value, 10);
+  const orderChrono  = document.getElementById('expall-order').value === 'chrono';
+
+  let ordered = logItems.slice();
+  if (orderChrono) ordered.sort((a, b) => a.start - b.start);
+
+  const el = document.getElementById('play-loading');
+  el.textContent = I18n.t('export.merge_progress');
+  el.classList.remove('hidden');
+
+  try {
+    const result = await api('/api/audio/export_merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: ordered.map(i => ({ channel_id: i.channel_id, start: i.start, end: i.end })),
+        format: fmt,
+        bitrate: fmt === 'wav' ? null : bitrate,
+        sample_rate: samplerate,
+      }),
+    });
+    el.textContent = I18n.t('export.merge_done');
+    _triggerDownload(result.download_url, result.filename);
+    setTimeout(() => el.classList.add('hidden'), 3000);
+  } catch (e) {
+    el.textContent = I18n.t('export.merge_error', { msg: e.message });
+    setTimeout(() => el.classList.add('hidden'), 5000);
   }
 }
 

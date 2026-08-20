@@ -25,7 +25,7 @@ from . import ui_state as _ui_state
 
 from . import app_logger as _app_logger
 from .app_logger import get_logger
-from .audio import export_audio, set_ffmpeg_path, stream_audio
+from .audio import export_audio, export_audio_merged, set_ffmpeg_path, stream_audio
 from .config import (
     invalidate_secrets_cache, load_playlists, load_settings, load_stations,
 )
@@ -33,7 +33,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.094"
+VERSION = "1.2.097"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -1056,6 +1056,66 @@ async def audio_export(body: dict) -> dict:
     _broadcast_raw(json.dumps({
         "type":         "export_done",
         "channel_id":   channel_id,
+        "filename":     fname,
+        "download_url": download_url,
+    }))
+    return {"filename": fname, "download_url": download_url}
+
+
+@app.post("/api/audio/export_merge")
+async def audio_export_merge(body: dict) -> dict:
+    raw_items = body.get("items") or []
+    if not raw_items:
+        raise HTTPException(400, "No items provided")
+    fmt         = body.get("format", "mp3")
+    bitrate     = body.get("bitrate") or "192k"
+    sample_rate = body.get("sample_rate")
+    if sample_rate is not None:
+        sample_rate = int(sample_rate)
+
+    resolved: list[tuple] = []
+    channel_names: set[str] = set()
+    for raw in raw_items:
+        channel_id = raw.get("channel_id", "")
+        channel_cfg = channels_map.get(channel_id)
+        if channel_cfg is None:
+            raise HTTPException(404, f"Unknown channel: {channel_id}")
+        start_dt = datetime.fromtimestamp(float(raw.get("start", 0)))
+        end_dt   = datetime.fromtimestamp(float(raw.get("end", 0)))
+        resolved.append((channel_cfg, start_dt, end_dt))
+        channel_names.add(channel_cfg.name)
+
+    channel_label = channel_names.pop() if len(channel_names) == 1 else "Несколько каналов"
+    safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', ' ', channel_label)
+    safe_name = ' '.join(safe_name.split())
+    now = datetime.now()
+    fname = f"{safe_name} склейка с {now.strftime('%Y-%m-%d %H-%M-%S')}.{fmt}"
+    out_path = str(EXPORT_DIR / fname)
+
+    log.info("Export merge: %d items fmt=%s br=%s -> %s", len(resolved), fmt, bitrate, fname)
+
+    _broadcast_raw(json.dumps({
+        "type":       "export_progress",
+        "channel_id": "_merged",
+        "filename":   fname,
+    }))
+
+    try:
+        await export_audio_merged(resolved, fmt, bitrate, sample_rate, out_path)
+    except Exception as exc:
+        log.error("Merge export failed: %s", exc)
+        _broadcast_raw(json.dumps({
+            "type":       "export_error",
+            "channel_id": "_merged",
+            "filename":   fname,
+            "error":      str(exc),
+        }))
+        raise HTTPException(500, str(exc))
+
+    download_url = f"/api/audio/download/{quote(fname)}"
+    _broadcast_raw(json.dumps({
+        "type":         "export_done",
+        "channel_id":   "_merged",
         "filename":     fname,
         "download_url": download_url,
     }))

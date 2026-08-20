@@ -230,6 +230,64 @@
     </div>
   </div>
 
+  <!-- ── Export-all modal ─────────────────────────────────────────── -->
+  <div id="export-all-modal" class="modal hidden">
+    <div class="modal-box">
+      <h3 data-i18n="export.all_title">Экспорт выбранных фрагментов</h3>
+
+      <div class="expall-radio-group">
+        <label class="expall-radio-opt">
+          <input type="radio" name="expall-mode" id="expall-mode-separate" value="separate" checked>
+          <div class="expall-radio-label" data-i18n="export.merge_mode_separate">Скачать отдельными файлами</div>
+        </label>
+        <label class="expall-radio-opt">
+          <input type="radio" name="expall-mode" id="expall-mode-merge" value="merge">
+          <div class="expall-radio-label" data-i18n="export.merge_mode_merge">Склеить фрагменты в один файл</div>
+        </label>
+      </div>
+
+      <label><span data-i18n="export.format_label">Формат:</span>
+        <select id="expall-format">
+          <option value="mp3">MP3</option>
+          <option value="wav">WAV PCM</option>
+          <option value="aac">AAC</option>
+        </select>
+      </label>
+      <label><span data-i18n="export.samplerate_label">Частота дискретизации:</span>
+        <select id="expall-samplerate">
+          <option value="32000">32 000 Гц</option>
+          <option value="44100" selected>44 100 Гц</option>
+          <option value="48000">48 000 Гц</option>
+        </select>
+      </label>
+      <label id="expall-bitrate-row"><span data-i18n="export.bitrate_label">Битрейт:</span>
+        <select id="expall-bitrate">
+          <option value="320k">320 kbps</option>
+          <option value="192k" selected>192 kbps</option>
+          <option value="128k">128 kbps</option>
+          <option value="64k">64 kbps</option>
+        </select>
+      </label>
+      <div id="expall-wav-note"  class="hidden" style="font-size:11px;color:var(--text2)" data-i18n="export.wav_note">WAV экспортируется как PCM 16-bit без сжатия</div>
+      <div id="expall-copy-note" class="hidden" style="font-size:11px;color:var(--accent2)" data-i18n="export.copy_note">⚡ Оригинальный формат канала — экспорт без перекодирования</div>
+
+      <div id="expall-order-block" class="hidden">
+        <label><span data-i18n="export.merge_order_label">Порядок склейки:</span>
+          <select id="expall-order">
+            <option value="chrono" selected data-i18n="export.merge_order_chrono">По времени начала фрагмента</option>
+            <option value="list" data-i18n="export.merge_order_list">Как в списке «Выбранные фрагменты»</option>
+          </select>
+        </label>
+        <div id="expall-aac-warning" class="hidden" style="font-size:11px;color:#e2b13c" data-i18n="export.merge_aac_warning">⚠ Для AAC маркеры невозможны технически — файл будет склеен без меток</div>
+      </div>
+
+      <div class="modal-buttons">
+        <button id="expall-ok"     class="btn-green" data-i18n="btn.export">Экспортировать</button>
+        <button id="expall-cancel" class="btn-danger" data-i18n="btn.cancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Sessions modal ──────────────────────────────────────────── -->
   <div id="sessions-modal" class="modal hidden">
     <div class="modal-box sessions-box">
