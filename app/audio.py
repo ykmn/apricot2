@@ -1121,7 +1121,17 @@ async def export_audio_merged(
             for (_channel, start, _end), dur in zip(items, durations):
                 markers.append((int(round(cumulative * sr)), _format_chapter_title(start)))
                 cumulative += dur
-            _write_wav_markers(out_path, markers)
+            try:
+                _write_wav_markers(out_path, markers)
+            except Exception:
+                # ffmpeg already wrote a valid (marker-less) file at out_path —
+                # remove it so a failed merge never leaves anything behind in
+                # EXPORT_DIR, matching the ffmpeg-failure cleanup just above.
+                try:
+                    Path(out_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
 
     return out_path
 
