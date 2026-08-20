@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 import mutagen.aac
+import mutagen.id3
 import mutagen.mp3
 import mutagen.wave
 
@@ -1023,6 +1024,45 @@ def _write_wav_markers(path: str, markers: list[tuple[int, str]]) -> None:
         f.write(struct.pack("<I", riff_size + len(appended)))
 
 
+def _build_sfmarkers_geob(markers: list[tuple[float, str]]) -> bytes:
+    """Build the binary payload for a Sound Forge GEOB:SfMarkers ID3v2 frame.
+
+    Standard ID3v2 CHAP/CTOC chapters (which ffmpeg writes natively) are
+    NOT what Sound Forge reads for MP3 markers — it uses this proprietary
+    format instead, the MP3 analog of the RIFF cue/LIST/adtl/labl chunks
+    _write_wav_markers writes for WAV. Reverse-engineered byte-for-byte from
+    a real Sound Forge-authored MP3 (project-root sample `Sound1.mp3`):
+    a 12-byte header (the constants 12 and 100, then the marker count),
+    followed by one variable-length record per marker: a constant 28,
+    an 8-byte little-endian position in 100ns ticks (Windows REFERENCE_TIME
+    units — confirmed against the sample's known marker positions), 12
+    reserved zero bytes, a 4-byte text length (UTF-16LE, includes the
+    2-byte null terminator), then the null-terminated UTF-16LE title.
+    """
+    body = b""
+    for pos_seconds, title in markers:
+        pos_ticks = int(round(pos_seconds * 10_000_000))
+        text = (title + "\x00").encode("utf-16-le")
+        body += struct.pack("<IQ12sI", 28, pos_ticks, b"\x00" * 12, len(text)) + text
+    header = struct.pack("<III", 12, 100, len(markers))
+    return header + body
+
+
+def _write_mp3_sf_markers(path: str, markers: list[tuple[float, str]]) -> None:
+    """Attach Sound Forge-compatible markers to an MP3 as a GEOB:SfMarkers
+    ID3v2 frame, alongside whatever ID3v2 chapters ffmpeg already wrote for
+    generic players — the two are independent frames and don't conflict.
+    """
+    if not markers:
+        return
+    tags = mutagen.id3.ID3(path)
+    tags.add(mutagen.id3.GEOB(
+        encoding=0, mime="", filename="", desc="SfMarkers",
+        data=_build_sfmarkers_geob(markers),
+    ))
+    tags.save(path, v2_version=3)
+
+
 def _probe_duration(path: str, out_format: str) -> float:
     """Read a just-encoded fragment's real duration in seconds via mutagen —
     used instead of the requested (end - start) to avoid marker-position
@@ -1082,6 +1122,7 @@ async def export_audio_merged(
             for (_channel, start, _end), dur in zip(items, durations):
                 chapters.append((cumulative, cumulative + dur, _format_chapter_title(start)))
                 cumulative += dur
+            sf_markers = [(start_s, title) for start_s, _end_s, title in chapters]
             chapters_path = Path(tmpdir) / "chapters.txt"
             chapters_path.write_text(_build_chapters_metadata(chapters), encoding="utf-8")
 
@@ -1113,6 +1154,19 @@ async def export_audio_merged(
             except OSError:
                 pass
             raise RuntimeError(f"ffmpeg exited with code {proc.returncode}:\n{last_lines}")
+
+        if out_format == "mp3":
+            try:
+                _write_mp3_sf_markers(out_path, sf_markers)
+            except Exception:
+                # ffmpeg already wrote a valid file (with the ID3v2 chapters
+                # above) at out_path — remove it so a failed merge never
+                # leaves anything behind in EXPORT_DIR.
+                try:
+                    Path(out_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
 
         if out_format == "wav":
             sr = sample_rate or items[0][0].sample_rate or 44100
