@@ -1064,7 +1064,10 @@ async def export_audio_merged(
             )
             seg_paths.append(seg_path)
 
-        durations = [_probe_duration(p, out_format) for p in seg_paths]
+        # Only mp3/wav embed markers, so only they need per-segment duration —
+        # skip probing entirely for aac (avoids a needless mutagen parse per
+        # fragment, and any risk of it choking on an unusual real ADTS file).
+        durations = [_probe_duration(p, out_format) for p in seg_paths] if out_format in ("mp3", "wav") else []
 
         concat_list = Path(tmpdir) / "merge_concat.txt"
         with concat_list.open("w", encoding="utf-8") as f:
