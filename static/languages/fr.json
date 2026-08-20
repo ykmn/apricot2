@@ -30,6 +30,7 @@
   },
   "transport": {
     "play_title": "Lecture/Pause",
+    "speed_title": "Lecture accélérée ×1.5",
     "mark_in_title": "Définir le début du fragment",
     "mark_out_title": "Définir la fin du fragment",
     "add_segment": "Ajouter un fragment",
@@ -191,6 +192,6 @@
   },
   "about": {
     "title": "Abricot 2",
-    "body": "<p class=\"about-version\">Version : {version}</p><p>Application web de navigation dans les enregistrements de surveillance des émissions radio : trouvez le bon moment, sélectionnez des fragments et exportez en format audio.</p><p><img src=\"/static/github-icon.svg\" width=\"32\" height=\"32\">&nbsp;<img src=\"/static/claude-icon.svg\" width=\"32\" height=\"32\"><br><br>© 2026 Roman Ermakov.<br>Application web open source distribuée selon les termes de la licence <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\" target=\"_blank\">GPL v3</a>.</p>"
+    "body": "<p class=\"about-version\">Version : {version}</p><p>Application web de navigation dans les enregistrements de surveillance des émissions radio : trouvez le bon moment, sélectionnez des fragments et exportez en format audio.</p><p><strong>Durées de conservation des archives radio (droit russe) :</strong></p><ul><li>Selon la loi russe « Sur les médias » (<a href=\"https://base.garant.ru/12145525/b6e02e45ca70d110df0019b9fe339c70/\" target=\"_blank\">n° 2124-I, article 34</a>), l'enregistrement principal d'une émission doit être conservé pendant au moins un mois à compter de sa diffusion. Exception importante : si l'émission contenait de la propagande électorale ou référendaire, l'enregistrement doit être conservé pendant au moins 12 mois à compter de sa diffusion. La loi impose également la tenue d'un registre (date, heure, sujet, auteur, animateur et participants), à conserver pendant au moins un an à compter de la dernière inscription.</li><li>Selon la loi fédérale « Sur la publicité » (<a href=\"https://base.garant.ru/10164247/caed1f338455c425853a4f32b00aa739/\" target=\"_blank\">n° 38-FZ, article 12</a>), il ne s'agit pas de l'enregistrement de toute l'antenne mais spécifiquement des supports publicitaires. La loi exige que les supports publicitaires eux-mêmes (ou leurs copies, y compris toutes les modifications), ainsi que les contrats de production, de diffusion et de distribution, soient conservés pendant un an, à compter de la dernière diffusion de la publicité ou de la fin du contrat.</li></ul><p><img src=\"/static/github-icon.svg\" width=\"32\" height=\"32\">&nbsp;<img src=\"/static/claude-icon.svg\" width=\"32\" height=\"32\"><br><br>© 2026 Roman Ermakov.<br>Application web open source distribuée selon les termes de la licence <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\" target=\"_blank\">GPL v3</a>.</p>"
   }
 }

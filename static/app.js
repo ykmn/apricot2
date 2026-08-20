@@ -12,6 +12,7 @@ let playFromTs      = null;    // timeline ts when playback started
 let playAnimFrame   = null;
 let _tlAnimUpdate   = false;   // true only during animation-frame setTime calls
 let _seekPending    = false;   // true while user scrolled and audio hasn't started yet
+let isFastPlay      = false;   // ×1.5 playback speed toggle
 
 const _LOG_KEY = 'apricot-logitems';  // legacy localStorage key — used only for migration
 
@@ -491,6 +492,7 @@ function _updateCurrentEntry() {
 // ── Transport ──────────────────────────────────────────────────────────────
 function initTransport() {
   document.getElementById('btn-play').addEventListener('click', togglePlay);
+  document.getElementById('btn-speed').addEventListener('click', toggleFastPlay);
   document.getElementById('btn-mark-in').addEventListener('click', () => Timeline.setSelStart());
   document.getElementById('btn-mark-out').addEventListener('click', () => Timeline.setSelEnd());
   document.getElementById('btn-clear-sel').addEventListener('click', () => Timeline.clearSelection());
@@ -546,6 +548,12 @@ function togglePlay() {
   startPlay();
 }
 
+function toggleFastPlay() {
+  isFastPlay = !isFastPlay;
+  document.getElementById('btn-speed').classList.toggle('active', isFastPlay);
+  audio.playbackRate = isFastPlay ? 1.5 : 1;
+}
+
 function startPlay() {
   const ts = Timeline.getCenterTime();
   const { start: selS, end: selE } = Timeline.getSelection();
@@ -563,6 +571,7 @@ function startPlay() {
 
   const url = `/api/audio/stream?channel=${currentChannel.id}&start=${startTs}&end=${endTs}&format=mp3&bitrate=192k`;
   audio.src = url;
+  audio.playbackRate = isFastPlay ? 1.5 : 1;
   audio.play().catch(e => { console.warn('Playback failed:', e); stopPlay(); });
   _startPlayheadAnimation();
 }
@@ -582,7 +591,7 @@ function _startPlayheadAnimation() {
     if (!isPlaying) return;
     if (!_seekPending) {
       // Don't advance while user is scrolling or audio is buffering
-      const elapsed = (Date.now() - playStartTime) / 1000;
+      const elapsed = (Date.now() - playStartTime) / 1000 * audio.playbackRate;
       _tlAnimUpdate = true;
       Timeline.setTime(playFromTs + elapsed);
       _tlAnimUpdate = false;
@@ -612,6 +621,7 @@ function _seekPlayback(ts) {
   const endTs = (selE !== null && ts <= selE) ? selE : ts + 3600;
   const url = `/api/audio/stream?channel=${currentChannel.id}&start=${ts}&end=${endTs}&format=mp3&bitrate=192k`;
   audio.src = url;
+  audio.playbackRate = isFastPlay ? 1.5 : 1;
   audio.play().catch(e => {
     console.warn('Seek failed:', e);
     _seekPending = false;

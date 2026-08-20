@@ -361,8 +361,11 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   letter-spacing: 0.03em;
 }
 .btn-mark:hover { border-color: var(--accent); color: var(--accent); }
-/* Push In/Out away from Play by one Play-button width */
+/* Push In/Out away from Play/speed by one Play-button width */
 #btn-mark-in { margin-left: 38px; }
+
+#btn-speed.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+#btn-speed.active:hover { color: #fff; }
 
 .btn-nav {
   background: var(--bg3);
@@ -814,7 +817,7 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
 
 /* ── About modal ─────────────────────────────────────────── */
 .about-box {
-  max-width: 480px;
+  max-width: 640px;
   width: 100%;
 }
 #update-content {
@@ -851,6 +854,8 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   line-height: 1.7;
   color: var(--text);
   text-align: left;
+  max-height: 65vh;
+  overflow-y: auto;
 }
 #about-content h2 {
   font-size: 20px;
@@ -864,6 +869,13 @@ button { cursor: pointer; border: none; border-radius: 4px; font-size: 13px; pad
   font-size: 14px;
 }
 #about-content p:last-child { margin-bottom: 0; }
+#about-content ul {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  font-size: 14px;
+}
+#about-content ul li { margin-bottom: 8px; }
+#about-content ul li:last-child { margin-bottom: 0; }
 #about-content .about-version {
   color: var(--text2);
   font-size: 13px;
