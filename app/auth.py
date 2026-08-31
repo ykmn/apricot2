@@ -501,7 +501,7 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
 
     # ── Подключение к серверу ─────────────────────────────────────────────
     try:
-        server = ldap3.Server(server_url, get_info=ldap3.ALL, connect_timeout=5)
+        server = ldap3.Server(server_url, get_info=ldap3.OFFLINE_AD_2012_R2, connect_timeout=5)
     except Exception as exc:
         raise _LdapTaggedError(
             _TAG_CONN_ERROR,
@@ -703,15 +703,25 @@ def _authenticate_ldap(username: str, password: str, cfg: dict) -> dict:
     conn_errors: list[tuple[str, str]] = []   # (label, detail)
 
     for dcfg in candidates:
+        label = dcfg.get("name", dcfg.get("domain", dcfg.get("server", "?")))
+        _t0 = time.perf_counter()
         try:
-            return _authenticate_one_domain(short_name, password, dcfg)
+            result = _authenticate_one_domain(short_name, password, dcfg)
+            log.debug(
+                "LDAP-логин %s через %s занял %.3fs",
+                short_name, label, time.perf_counter() - _t0,
+            )
+            return result
         except _LdapTaggedError as exc:
+            log.debug(
+                "Попытка LDAP-логина %s через %s провалилась за %.3fs (%s)",
+                short_name, label, time.perf_counter() - _t0, exc.tag,
+            )
             if exc.tag not in _CONTINUE_TAGS:
                 # Definitive failure (wrong password, no groups, config error) → stop
                 raise LdapAuthError(str(exc)) from None
 
             last_error = exc
-            label = dcfg.get("name", dcfg.get("domain", dcfg.get("server", "?")))
             if exc.tag == _TAG_NOT_FOUND:
                 not_found_domains.append(label)
             else:
