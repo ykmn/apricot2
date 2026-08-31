@@ -411,26 +411,49 @@ class _LdapTaggedError(LdapAuthError):
         self.tag = tag
 
 
+# RID (primaryGroupID) → DN основной группы почти никогда не меняется в
+# рамках домена, поэтому кешируем результат поиска на час вместо того,
+# чтобы делать LDAP-запрос на каждый логин.
+_primary_group_dn_cache: dict[tuple[str, int], tuple[str, float]] = {}
+_PRIMARY_GROUP_CACHE_TTL = 3600  # секунд
+
+
 def _get_primary_group_dn(conn, base_dn: str, primary_group_id) -> Optional[str]:
     """Return the DN of the user's primary group by primaryGroupToken.
 
     AD stores the user's primary group as a RID in primaryGroupID.
     The matching group can be found via the computed attribute primaryGroupToken.
     This covers Domain Users (RID 513) and any other primary group.
+    Result is cached per (base_dn, primary_group_id) for _PRIMARY_GROUP_CACHE_TTL
+    seconds — this mapping is effectively static within a domain.
     """
     import ldap3  # noqa: PLC0415
     if not primary_group_id:
         return None
+
+    try:
+        rid = int(primary_group_id)
+    except (TypeError, ValueError):
+        log.warning("Unexpected primaryGroupID value %r — skipping primary group", primary_group_id)
+        return None
+
+    cache_key = (base_dn, rid)
+    now = time.time()
+    cached = _primary_group_dn_cache.get(cache_key)
+    if cached is not None and now - cached[1] < _PRIMARY_GROUP_CACHE_TTL:
+        return cached[0]
+
     try:
         conn.search(
             base_dn,
-            f"(primaryGroupToken={int(primary_group_id)})",
+            f"(primaryGroupToken={rid})",
             search_scope=ldap3.SUBTREE,
             attributes=["distinguishedName"],
         )
         if conn.entries:
             dn = str(conn.entries[0].distinguishedName)
             log.debug("Primary group for primaryGroupID=%s: %s", primary_group_id, dn)
+            _primary_group_dn_cache[cache_key] = (dn, now)
             return dn
     except Exception as exc:
         log.warning("Primary group lookup failed (primaryGroupID=%s): %s", primary_group_id, exc)
@@ -501,7 +524,7 @@ def _authenticate_one_domain(short_name: str, password: str, dcfg: dict) -> dict
 
     # ── Подключение к серверу ─────────────────────────────────────────────
     try:
-        server = ldap3.Server(server_url, get_info=ldap3.ALL, connect_timeout=5)
+        server = ldap3.Server(server_url, get_info=ldap3.OFFLINE_AD_2012_R2, connect_timeout=5)
     except Exception as exc:
         raise _LdapTaggedError(
             _TAG_CONN_ERROR,
@@ -703,15 +726,25 @@ def _authenticate_ldap(username: str, password: str, cfg: dict) -> dict:
     conn_errors: list[tuple[str, str]] = []   # (label, detail)
 
     for dcfg in candidates:
+        label = dcfg.get("name", dcfg.get("domain", dcfg.get("server", "?")))
+        _t0 = time.perf_counter()
         try:
-            return _authenticate_one_domain(short_name, password, dcfg)
+            result = _authenticate_one_domain(short_name, password, dcfg)
+            log.debug(
+                "LDAP-логин %s через %s занял %.3fs",
+                short_name, label, time.perf_counter() - _t0,
+            )
+            return result
         except _LdapTaggedError as exc:
+            log.debug(
+                "Попытка LDAP-логина %s через %s провалилась за %.3fs (%s)",
+                short_name, label, time.perf_counter() - _t0, exc.tag,
+            )
             if exc.tag not in _CONTINUE_TAGS:
                 # Definitive failure (wrong password, no groups, config error) → stop
                 raise LdapAuthError(str(exc)) from None
 
             last_error = exc
-            label = dcfg.get("name", dcfg.get("domain", dcfg.get("server", "?")))
             if exc.tag == _TAG_NOT_FOUND:
                 not_found_domains.append(label)
             else:
