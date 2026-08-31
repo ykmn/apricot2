@@ -353,7 +353,7 @@ class FileIndexManager:
 
     async def _try_scan(self, idx: ChannelIndex,
                         max_retries: int = 3,
-                        timeout: float = 30.0,
+                        timeout: float = 180.0,
                         retry_delay: float = 3.0) -> tuple[bool, str]:
         """Scan with retries + per-attempt timeout. Returns (success, error_message).
 
@@ -362,6 +362,15 @@ class FileIndexManager:
         startup (an external kinit/cron process populates it asynchronously;
         retrying back-to-back with no delay just fails the same way every
         time, since the ticket cache is still empty a few milliseconds later).
+
+        timeout was 30s back when refresh() scanned a fixed 90-day window
+        (~90 folder listings). refresh() now walks every date folder that
+        actually exists (unbounded retention, see ChannelIndex._discover_dates)
+        — a channel with a year+ of history does several hundred sequential
+        SMB round-trips, which can pass 30s on a loaded link even with no
+        real problem. 180s gives that room without masking a genuine outage
+        (still retried max_retries times, and a real connection failure
+        during scandir() fails fast rather than hanging for the timeout).
         """
         loop = asyncio.get_running_loop()
         last_error = ""
