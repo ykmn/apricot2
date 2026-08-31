@@ -431,7 +431,13 @@ def _get_primary_group_dn(conn, base_dn: str, primary_group_id) -> Optional[str]
     if not primary_group_id:
         return None
 
-    cache_key = (base_dn, int(primary_group_id))
+    try:
+        rid = int(primary_group_id)
+    except (TypeError, ValueError):
+        log.warning("Unexpected primaryGroupID value %r — skipping primary group", primary_group_id)
+        return None
+
+    cache_key = (base_dn, rid)
     now = time.time()
     cached = _primary_group_dn_cache.get(cache_key)
     if cached is not None and now - cached[1] < _PRIMARY_GROUP_CACHE_TTL:
@@ -440,7 +446,7 @@ def _get_primary_group_dn(conn, base_dn: str, primary_group_id) -> Optional[str]
     try:
         conn.search(
             base_dn,
-            f"(primaryGroupToken={cache_key[1]})",
+            f"(primaryGroupToken={rid})",
             search_scope=ldap3.SUBTREE,
             attributes=["distinguishedName"],
         )
