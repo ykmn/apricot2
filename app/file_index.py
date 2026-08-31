@@ -176,8 +176,28 @@ class ChannelIndex:
                       ch.id, folder, len(skipped_fmt), ch.file_format, skipped_fmt[0])
         return result
 
-    def refresh(self, days_back: int = 90, days_ahead: int = 1) -> tuple[list[AudioFile], list[AudioFile]]:
-        """Full rescan of [today-days_back … today+days_ahead]. Returns (added, removed).
+    def _discover_dates(self) -> list[date]:
+        """List every date-folder actually present under the channel root.
+
+        Retention is unbounded — rather than scanning a fixed day window
+        back from today (which silently hides/evicts anything older), the
+        root directory is listed and each entry name is parsed against
+        folder_format; non-matching entries are ignored.
+        """
+        ch = self.channel
+        entries = smb.listdir_safe(ch.local_path, ch.smb)
+        dates: list[date] = []
+        for name in entries:
+            try:
+                dates.append(datetime.strptime(name, ch.folder_format).date())
+            except ValueError:
+                continue
+        dates.sort()
+        return dates
+
+    def refresh(self) -> tuple[list[AudioFile], list[AudioFile]]:
+        """Full rescan of every date folder present under the channel root.
+        Returns (added, removed).
 
         If any date's scan fails with a real error (auth/connection — see
         smb_client.scandir, which deliberately raises for these instead of
@@ -192,10 +212,13 @@ class ChannelIndex:
         re-raised so callers (poll loop / initial scan) mark the channel
         unreachable and retry, instead of the failure being invisible.
         """
-        today = date.today()
-        dates = [today - timedelta(days=i) for i in range(days_back, -days_ahead - 1, -1)]
         current: dict[str, AudioFile] = {}
         scan_error: Exception | None = None
+        try:
+            dates = self._discover_dates()
+        except Exception as exc:
+            log.debug("date discovery failed for %s: %s", self.channel.id, exc)
+            raise
         for d in dates:
             try:
                 current.update(self._scan_date(d))

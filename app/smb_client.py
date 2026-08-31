@@ -159,6 +159,30 @@ def scandir(local_path: str | None, smb_cfg: SMBConfig | None, rel: str = "") ->
     return []
 
 
+def listdir_safe(local_path: str | None, smb_cfg: SMBConfig | None, rel: str = "") -> list[str]:
+    """Return entry names (files and dirs) inside *rel*.
+
+    Same error semantics as scandir(): raises on auth/connection failures so
+    the caller can mark the channel unreachable, but returns [] when the
+    folder itself simply doesn't exist yet.
+    """
+    if local_path:
+        p = Path(local_path) / rel if rel else Path(local_path)
+        if not p.exists():
+            return []
+        return [e.name for e in p.iterdir()]
+    if smb_cfg:
+        _register(smb_cfg)
+        unc = _unc(smb_cfg, rel)
+        try:
+            return smbclient.listdir(unc)
+        except Exception as exc:
+            if _is_folder_not_found(exc):
+                return []
+            raise
+    return []
+
+
 def exists(local_path: str | None, smb: SMBConfig | None, rel: str) -> bool:
     if local_path:
         return (Path(local_path) / rel).exists()
