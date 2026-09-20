@@ -67,8 +67,6 @@ cd apricot2
 > На всех платформах используйте **виртуальное окружение** — это изолирует пакеты проекта от системного Python и избавляет от ошибки `externally-managed-environment` (Ubuntu 23.04+ / Debian 12+).
 
 ```bash
-cd apricot2
-
 # 1. Создать окружение (один раз)
 python3 -m venv .venv        # Linux / macOS
 python  -m venv .venv        # Windows
@@ -630,10 +628,9 @@ umount mounts/fileserver.domain.local/LOGGER
 
 ```bash
 # Активируйте окружение
-# Linux / macOS — 
-source .venv/bin/activate
-# Windows
-.venv\Scripts\activate
+source .venv/bin/activate    # Linux / macOS
+.venv\Scripts\activate       # Windows (cmd)
+.venv\Scripts\Activate.ps1   # Windows (PowerShell)
 
 python apricot2.py
 
