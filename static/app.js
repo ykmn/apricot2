@@ -819,7 +819,6 @@ function renderLogList() {
       logItems = logItems.filter(i => i.id !== item.id);
       _saveLogItems();
       renderLogList();
-      Timeline.clearSelection();
     });
 
     actions.appendChild(dlBtn);
