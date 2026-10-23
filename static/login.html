@@ -289,7 +289,9 @@ document.getElementById('login-form').addEventListener('submit', async e => {
     });
 
     if (resp.ok) {
-      const next = new URLSearchParams(location.search).get('next') || '/';
+      let next = new URLSearchParams(location.search).get('next') || '/';
+      // only same-origin paths: block '//evil.com', '/\evil.com', 'https://...'
+      if (!/^\/(?![\/\\])/.test(next)) next = '/';
       location.href = next;
     } else {
       const data = await resp.json().catch(() => ({}));

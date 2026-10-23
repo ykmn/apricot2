@@ -6,7 +6,7 @@
 
 ## Требования
 
-- Python 3.9+
+- Python 3.9+ (рекомендуется свежий патч-релиз 3.12+ — старые версии содержат известные уязвимости stdlib)
 - [**ffmpeg**](https://ffmpeg.org/download.html) должен быть установлен и доступен в PATH (или путь указан в `config/settings.yaml`)
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `apt install ffmpeg`

@@ -1,7 +1,7 @@
 # ── Веб-фреймворк ─────────────────────────────────────────────────────────────
-fastapi>=0.104.0
+fastapi>=0.116.1              # starlette>=0.47.2 (CVE-2025-54121, CVE-2024-47874)
 uvicorn[standard]>=0.24.0     # ASGI-сервер (включает websockets, httptools)
-python-multipart>=0.0.6       # Парсинг form-data в FastAPI
+python-multipart>=0.0.18      # Парсинг form-data в FastAPI
 
 # ── Доступ к файлам ────────────────────────────────────────────────────────────
 smbprotocol>=1.13.0            # Чтение аудиофайлов с SMB/CIFS-шар (Windows Fileserver)
