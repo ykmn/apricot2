@@ -33,7 +33,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.109"
+VERSION = "1.2.110"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -238,6 +238,15 @@ async def _auth_middleware(request: Request, call_next):
 
     request.state.user = session
     return await call_next(request)
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -958,6 +967,20 @@ async def get_playlist_config(channel_id: str) -> dict:
 # REST API — audio
 # ──────────────────────────────────────────────────────────────────────────────
 
+_ALLOWED_FORMATS = {"mp3", "wav", "aac"}
+_BITRATE_RE = re.compile(r"^\d{2,4}k?$")
+
+
+def _validate_audio_params(fmt: str, bitrate: str, sample_rate: int | None) -> None:
+    """Reject values that end up in the export filename or ffmpeg arguments."""
+    if fmt not in _ALLOWED_FORMATS:
+        raise HTTPException(400, "Invalid format")
+    if not isinstance(bitrate, str) or not _BITRATE_RE.match(bitrate):
+        raise HTTPException(400, "Invalid bitrate")
+    if sample_rate is not None and not (8000 <= sample_rate <= 192000):
+        raise HTTPException(400, "Invalid sample_rate")
+
+
 @app.get("/api/audio/stream")
 async def audio_stream(
     channel:     str   = Query(...),
@@ -967,6 +990,7 @@ async def audio_stream(
     bitrate:     str   = Query("192k"),
     sample_rate: int   = Query(None),
 ):
+    _validate_audio_params(format, bitrate, sample_rate)
     channel_cfg = channels_map.get(channel)
     if channel_cfg is None:
         raise HTTPException(404)
@@ -1010,6 +1034,7 @@ async def audio_export(body: dict) -> dict:
     copy_mode   = bool(body.get("copy_mode", False))
     if sample_rate is not None:
         sample_rate = int(sample_rate)
+    _validate_audio_params(fmt, str(bitrate), sample_rate)
 
     channel_cfg = channels_map.get(channel_id)
     if channel_cfg is None:
@@ -1072,6 +1097,7 @@ async def audio_export_merge(body: dict) -> dict:
     sample_rate = body.get("sample_rate")
     if sample_rate is not None:
         sample_rate = int(sample_rate)
+    _validate_audio_params(fmt, str(bitrate), sample_rate)
 
     resolved: list[tuple] = []
     channel_names: set[str] = set()
