@@ -10,10 +10,13 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import logging
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+log = logging.getLogger("apricot2.config_store")
 
 CONFIG_DIR   = Path(__file__).parent.parent / "config"
 STATIONS_DIR = CONFIG_DIR / "stations"
@@ -105,6 +108,9 @@ def scan_ids(directory: Path) -> dict[str, Path]:
         except ConfigStoreError:
             continue
         if isinstance(raw, dict) and isinstance(raw.get("id"), str):
+            if raw["id"] in result:
+                log.warning("Duplicate id %r: %s и %s",
+                            raw["id"], result[raw["id"]].name, f.name)
             result[raw["id"]] = f
     return result
 
@@ -145,7 +151,9 @@ def save_by_id(directory: Path, old_id: str | None, data: dict) -> str:
         # New record or id changed → canonical filename <id>.yaml
         target = directory / f"{new_id}.yaml"
     write_yaml(target, data)
-    if old_id and old_id != new_id:
+    # Удалить прежний файл, если пишем в другой — иначе при id, лежащем
+    # в неканоничном файле (напр. DJIN-retro_fm.yaml), получаем дубликат id.
+    if old_id:
         old_file = files[old_id]
         if old_file != target and old_file.exists():
             old_file.unlink()
