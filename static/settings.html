@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Настройки — Абрикос 2</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/settings.css">
+  <link rel="icon" href="/static/apricot.svg" sizes="any" type="image/svg+xml">
+</head>
+<body>
+<div id="settings-app">
+
+  <div id="settings-topbar">
+    <a href="/" id="settings-back" title="Назад к плееру">←</a>
+    <img src="/static/apricot.svg" width="32" height="32" alt="">
+    <span id="settings-title">Настройки</span>
+    <span id="settings-status"></span>
+  </div>
+
+  <div id="settings-tabs">
+    <button class="stab active" data-tab="stations">Станции</button>
+    <button class="stab" data-tab="playlogs">Плейлоги</button>
+    <button class="stab" data-tab="auth">Авторизация</button>
+    <button class="stab" data-tab="users">Пользователи</button>
+    <button class="stab" data-tab="general">Общие</button>
+  </div>
+
+  <div id="settings-panels">
+    <div class="spanel active" id="panel-stations"></div>
+    <div class="spanel" id="panel-playlogs"></div>
+    <div class="spanel" id="panel-auth"></div>
+    <div class="spanel" id="panel-users"></div>
+    <div class="spanel" id="panel-general"></div>
+  </div>
+
+  <!-- Generic modal -->
+  <div id="cfg-modal" class="modal hidden">
+    <div class="modal-box cfg-modal-box">
+      <h3 id="cfg-modal-title"></h3>
+      <div id="cfg-modal-body"></div>
+      <div id="cfg-modal-error" class="cfg-error hidden"></div>
+      <div class="modal-buttons">
+        <button id="cfg-modal-save" class="btn-green">Сохранить</button>
+        <button id="cfg-modal-cancel" class="btn-danger">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm modal -->
+  <div id="cfg-confirm" class="modal hidden">
+    <div class="modal-box">
+      <h3 id="cfg-confirm-title">Подтверждение</h3>
+      <div id="cfg-confirm-text"></div>
+      <div class="modal-buttons">
+        <button id="cfg-confirm-ok" class="btn-danger">Удалить</button>
+        <button id="cfg-confirm-cancel" class="btn-green">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="/static/settings.js"></script>
+</body>
+</html>
