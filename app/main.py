@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 
 from . import auth as _auth
+from . import config_store as _store
 from . import ui_state as _ui_state
 
 from . import app_logger as _app_logger
@@ -33,7 +34,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.2.114"
+VERSION = "1.2.117"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -678,15 +679,20 @@ def _require_admin(request: Request) -> None:
         raise HTTPException(403, "Admin access required")
 
 
+def _reload_runtime() -> None:
+    """Re-read YAML config and restart background scan/preload loops."""
+    _load_config()
+    file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
+    asyncio.create_task(_background_startup())
+    _broadcast_raw(json.dumps({"type": "config_reloaded"}))
+
+
 @app.post("/api/reload")
 async def reload_config(request: Request) -> dict:
     """Reload stations, playlists and settings from YAML files without restart."""
     _require_admin(request)
     log.info("Config reload requested")
-    _load_config()
-    file_index.setup(all_channels, poll_interval=poll_interval, broadcast=_broadcast)
-    asyncio.create_task(_background_startup())
-    _broadcast_raw(json.dumps({"type": "config_reloaded"}))
+    _reload_runtime()
     return {
         "ok":       True,
         "stations": len(stations_map),
@@ -735,6 +741,299 @@ async def admin_terminate_session(session_id: str, request: Request) -> dict:
     found = _auth.terminate_session_by_id(session_id)
     if not found:
         raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Settings GUI — config CRUD (admin only). Files stay the source of truth.
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/settings", include_in_schema=False)
+async def settings_page() -> HTMLResponse:
+    return _html_response("settings.html")
+
+
+def _store_error(exc: _store.ConfigStoreError) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/config/secrets")
+async def cfg_list_secrets(request: Request) -> list:
+    """SMB/LDAP credentials list without passwords — for dropdowns."""
+    _require_admin(request)
+    return _store.secrets_list()
+
+
+# ── Stations ─────────────────────────────────────────────────────────────────
+
+def _validate_station_payload(data: dict) -> None:
+    _store.validate_id(data.get("id"))
+    if not data.get("name"):
+        raise _store.ConfigStoreError("Поле name обязательно")
+    channels = data.get("channels") or []
+    if not isinstance(channels, list):
+        raise _store.ConfigStoreError("channels: ожидается список")
+    seen: set[str] = set()
+    for ch in channels:
+        cid = _store.validate_id(ch.get("id"), "channels:id")
+        if cid in seen:
+            raise _store.ConfigStoreError(f"Дублируется id канала «{cid}»")
+        seen.add(cid)
+        if not ch.get("name"):
+            raise _store.ConfigStoreError(f"Канал «{cid}»: поле name обязательно")
+        smb = ch.get("smb")
+        if smb is not None and (not smb.get("host") or not smb.get("share")):
+            raise _store.ConfigStoreError(f"Канал «{cid}»: smb требует host и share")
+
+
+@app.get("/api/config/stations")
+async def cfg_list_stations(request: Request) -> list:
+    _require_admin(request)
+    return _store.list_raw(_store.STATIONS_DIR)
+
+
+@app.post("/api/config/stations")
+async def cfg_create_station(request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    try:
+        _validate_station_payload(data)
+        new_id = _store.save_by_id(_store.STATIONS_DIR, None, data)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("Station created via GUI: %s", new_id)
+    _reload_runtime()
+    return {"ok": True, "id": new_id}
+
+
+@app.put("/api/config/stations/{station_id}")
+async def cfg_update_station(station_id: str, request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    try:
+        _validate_station_payload(data)
+        new_id = _store.save_by_id(_store.STATIONS_DIR, station_id, data)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("Station updated via GUI: %s → %s", station_id, new_id)
+    _reload_runtime()
+    return {"ok": True, "id": new_id}
+
+
+@app.delete("/api/config/stations/{station_id}")
+async def cfg_delete_station(station_id: str, request: Request) -> dict:
+    _require_admin(request)
+    try:
+        _store.delete_by_id(_store.STATIONS_DIR, station_id)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("Station deleted via GUI: %s", station_id)
+    _reload_runtime()
+    return {"ok": True}
+
+
+# ── Playlogs ─────────────────────────────────────────────────────────────────
+
+def _validate_playlog_payload(data: dict) -> None:
+    _store.validate_id(data.get("id"))
+    if not data.get("name"):
+        raise _store.ConfigStoreError("Поле name обязательно")
+    sources = data.get("sources") or []
+    if not isinstance(sources, list):
+        raise _store.ConfigStoreError("sources: ожидается список")
+    seen: set[int] = set()
+    for src in sources:
+        pr = int(src.get("priority", 0))
+        if pr in seen:
+            raise _store.ConfigStoreError(f"Дублируется priority {pr}")
+        seen.add(pr)
+        smb = src.get("smb")
+        if smb is not None and (not smb.get("host") or not smb.get("share")):
+            raise _store.ConfigStoreError(f"Источник priority {pr}: smb требует host и share")
+        if smb is None and not src.get("local_path"):
+            raise _store.ConfigStoreError(
+                f"Источник priority {pr}: укажите SMB-путь или local_path"
+            )
+
+
+@app.get("/api/config/playlogs")
+async def cfg_list_playlogs(request: Request) -> list:
+    _require_admin(request)
+    return _store.list_raw(_store.PLAYLOGS_DIR)
+
+
+@app.post("/api/config/playlogs")
+async def cfg_create_playlog(request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    try:
+        _validate_playlog_payload(data)
+        new_id = _store.save_by_id(_store.PLAYLOGS_DIR, None, data)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("Playlog created via GUI: %s", new_id)
+    _reload_runtime()
+    return {"ok": True, "id": new_id}
+
+
+@app.put("/api/config/playlogs/{playlog_id}")
+async def cfg_update_playlog(playlog_id: str, request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    try:
+        _validate_playlog_payload(data)
+        new_id = _store.save_by_id(_store.PLAYLOGS_DIR, playlog_id, data)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("Playlog updated via GUI: %s → %s", playlog_id, new_id)
+    _reload_runtime()
+    return {"ok": True, "id": new_id}
+
+
+@app.delete("/api/config/playlogs/{playlog_id}")
+async def cfg_delete_playlog(playlog_id: str, request: Request) -> dict:
+    _require_admin(request)
+    try:
+        _store.delete_by_id(_store.PLAYLOGS_DIR, playlog_id)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("Playlog deleted via GUI: %s", playlog_id)
+    _reload_runtime()
+    return {"ok": True}
+
+
+# ── LDAP / auth config ───────────────────────────────────────────────────────
+
+@app.get("/api/config/ldap")
+async def cfg_get_ldap(request: Request) -> dict:
+    _require_admin(request)
+    if not _store.LDAP_YAML.exists():
+        return {"Local": False, "LDAP": False, "admin_groups": [], "domains": []}
+    data = _store.read_yaml(_store.LDAP_YAML) or {}
+    data.setdefault("domains", [])
+    return data
+
+
+@app.put("/api/config/ldap")
+async def cfg_put_ldap(request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    try:
+        for d in data.get("domains") or []:
+            if not d.get("name") or not d.get("server") or not d.get("base_dn"):
+                raise _store.ConfigStoreError("Каждый домен требует name, server и base_dn")
+        _store.write_yaml(_store.LDAP_YAML, data)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("ldap.yaml updated via GUI")
+    _auth.invalidate_auth_cache()
+    return {"ok": True}
+
+
+# ── Local users ──────────────────────────────────────────────────────────────
+
+def _load_users() -> list[dict]:
+    if not _store.USERS_YAML.exists():
+        return []
+    return (_store.read_yaml(_store.USERS_YAML) or {}).get("users") or []
+
+
+def _save_users(users: list[dict]) -> None:
+    try:
+        _store.write_yaml(_store.USERS_YAML, {"users": users})
+    except _store.ConfigStoreError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/api/config/users")
+async def cfg_list_users(request: Request) -> list:
+    _require_admin(request)
+    return [
+        {
+            "username":     u.get("username", ""),
+            "is_admin":     bool(u.get("is_admin", False)),
+            "has_password": bool(u.get("password_pbkdf2") or u.get("password")),
+        }
+        for u in _load_users()
+    ]
+
+
+@app.post("/api/config/users")
+async def cfg_create_user(request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", ""))
+    if not username:
+        raise HTTPException(400, "Введите имя пользователя")
+    if not password:
+        raise HTTPException(400, "Введите пароль")
+    users = _load_users()
+    if any(u.get("username") == username for u in users):
+        raise HTTPException(400, f"Пользователь «{username}» уже существует")
+    users.append({
+        "username":        username,
+        "password_pbkdf2": _auth._hash_pbkdf2(password),
+        "is_admin":        bool(data.get("is_admin", False)),
+    })
+    _save_users(users)
+    log.info("Local user created via GUI: %s", username)
+    return {"ok": True}
+
+
+@app.put("/api/config/users/{username}")
+async def cfg_update_user(username: str, request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    users = _load_users()
+    entry = next((u for u in users if u.get("username") == username), None)
+    if entry is None:
+        raise HTTPException(404, f"Пользователь «{username}» не найден")
+    if "is_admin" in data:
+        entry["is_admin"] = bool(data["is_admin"])
+    password = str(data.get("password") or "")
+    if password:
+        entry["password_pbkdf2"] = _auth._hash_pbkdf2(password)
+        entry.pop("password", None)
+    _save_users(users)
+    log.info("Local user updated via GUI: %s", username)
+    return {"ok": True}
+
+
+@app.delete("/api/config/users/{username}")
+async def cfg_delete_user(username: str, request: Request) -> dict:
+    _require_admin(request)
+    if username == _current_username(request):
+        raise HTTPException(400, "Нельзя удалить собственную учётную запись")
+    users = _load_users()
+    remaining = [u for u in users if u.get("username") != username]
+    if len(remaining) == len(users):
+        raise HTTPException(404, f"Пользователь «{username}» не найден")
+    _save_users(remaining)
+    log.info("Local user deleted via GUI: %s", username)
+    return {"ok": True}
+
+
+# ── Global settings ──────────────────────────────────────────────────────────
+
+@app.get("/api/config/settings")
+async def cfg_get_settings(request: Request) -> dict:
+    _require_admin(request)
+    if not _store.SETTINGS_YAML.exists():
+        return {}
+    return _store.read_yaml(_store.SETTINGS_YAML) or {}
+
+
+@app.put("/api/config/settings")
+async def cfg_put_settings(request: Request) -> dict:
+    _require_admin(request)
+    data = await request.json()
+    try:
+        _store.write_yaml(_store.SETTINGS_YAML, data)
+    except _store.ConfigStoreError as exc:
+        raise _store_error(exc)
+    log.info("settings.yaml updated via GUI")
+    _reload_runtime()
     return {"ok": True}
 
 

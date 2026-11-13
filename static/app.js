@@ -1938,6 +1938,12 @@ function initHamburgerMenu() {
     _openSessionsModal();
   });
 
+  // Settings
+  document.getElementById('menu-settings').addEventListener('click', () => {
+    menu.classList.add('hidden');
+    window.open('/settings', '_blank');
+  });
+
   // Sessions modal buttons
   document.getElementById('sessions-refresh').addEventListener('click', _loadSessions);
   document.getElementById('sessions-close').addEventListener('click', () => {
