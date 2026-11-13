@@ -34,7 +34,7 @@ from .file_index import file_index
 from .playlist import get_entries
 from .smb_mount import MOUNTS_DIR, SUPPORTED as _SMB_SUPPORTED, _is_mounted
 
-VERSION = "1.3.001"
+VERSION = "1.3.002"
 PROJECT_ROOT = Path(__file__).parent.parent
 EXPORT_DIR = PROJECT_ROOT / "export"
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -834,6 +834,27 @@ async def cfg_delete_station(station_id: str, request: Request) -> dict:
 
 # ── Playlogs ─────────────────────────────────────────────────────────────────
 
+def _cascade_playlog_id(old_id: str, new_id: str | None) -> list[str]:
+    """Update (new_id given) or remove (new_id=None) references to a playlog id
+    in every station config. Returns ids of affected stations."""
+    affected: list[str] = []
+    for raw in _store.list_raw(_store.STATIONS_DIR):
+        dirty = False
+        for ch in raw.get("channels") or []:
+            pls = ch.get("playlogs") or []
+            if old_id not in pls:
+                continue
+            if new_id is None:
+                ch["playlogs"] = [p for p in pls if p != old_id]
+            else:
+                ch["playlogs"] = [new_id if p == old_id else p for p in pls]
+            dirty = True
+        if dirty:
+            _store.save_by_id(_store.STATIONS_DIR, raw.get("id"), raw)
+            affected.append(raw.get("id"))
+    return affected
+
+
 def _validate_playlog_payload(data: dict) -> None:
     _store.validate_id(data.get("id"))
     if not data.get("name"):
@@ -886,8 +907,14 @@ async def cfg_update_playlog(playlog_id: str, request: Request) -> dict:
     except _store.ConfigStoreError as exc:
         raise _store_error(exc)
     log.info("Playlog updated via GUI: %s → %s", playlog_id, new_id)
+    affected: list[str] = []
+    if new_id != playlog_id:
+        affected = _cascade_playlog_id(playlog_id, new_id)
+        if affected:
+            log.info("Playlog id cascade: %s → %s in stations %s",
+                     playlog_id, new_id, ", ".join(affected))
     _reload_runtime()
-    return {"ok": True, "id": new_id}
+    return {"ok": True, "id": new_id, "cascaded_stations": affected}
 
 
 @app.delete("/api/config/playlogs/{playlog_id}")
@@ -898,8 +925,12 @@ async def cfg_delete_playlog(playlog_id: str, request: Request) -> dict:
     except _store.ConfigStoreError as exc:
         raise _store_error(exc)
     log.info("Playlog deleted via GUI: %s", playlog_id)
+    affected = _cascade_playlog_id(playlog_id, None)
+    if affected:
+        log.info("Playlog delete cascade: removed %s from stations %s",
+                 playlog_id, ", ".join(affected))
     _reload_runtime()
-    return {"ok": True}
+    return {"ok": True, "cascaded_stations": affected}
 
 
 # ── LDAP / auth config ───────────────────────────────────────────────────────

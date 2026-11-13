@@ -518,23 +518,11 @@ function renderPlaylogs() {
           onclick: () => confirmDlg(
             `Удалить плейлог «${pl.name}» (${pl.id})? Файл будет удалён, ссылки в каналах очищены.`,
             async () => {
-              await delCfg('/api/config/playlogs/' + encodeURIComponent(pl.id));
-              // Каскад: убрать ссылки на удалённый плейлог из всех каналов
-              await loadStations();
-              const affected = [];
-              for (const st of state.stations) {
-                let dirty = false;
-                for (const ch of st.channels || []) {
-                  const before = (ch.playlogs || []).length;
-                  ch.playlogs = (ch.playlogs || []).filter(id => id !== pl.id);
-                  if (ch.playlogs.length !== before) dirty = true;
-                }
-                if (dirty) affected.push(st);
-              }
-              for (const st of affected) {
-                await putCfg('/api/config/stations/' + encodeURIComponent(st.id), st);
-              }
-              setStatus('Плейлог удалён');
+              const result = await delCfg('/api/config/playlogs/' + encodeURIComponent(pl.id));
+              const cascaded = (result && result.cascaded_stations) || [];
+              setStatus(cascaded.length
+                ? `Плейлог удалён, ссылки очищены в станциях: ${cascaded.join(', ')}`
+                : 'Плейлог удалён');
               await loadPlaylogs();
             }),
         }),
@@ -763,32 +751,14 @@ function openPlaylogEditor(playlog, isNew) {
       pl.class_colors = colors;
       pl.class_names = names;
 
-      if (origId) await putCfg('/api/config/playlogs/' + encodeURIComponent(origId), pl);
-      else await postCfg('/api/config/playlogs', pl);
-
-      // Каскад: ID переименован — обновить ссылки во всех каналах всех станций
-      if (origId && origId !== pl.id) {
-        await loadStations();
-        const affected = [];
-        for (const st of state.stations) {
-          let dirty = false;
-          for (const ch of st.channels || []) {
-            const idx = (ch.playlogs || []).indexOf(origId);
-            if (idx !== -1) { ch.playlogs[idx] = pl.id; dirty = true; }
-          }
-          if (dirty) affected.push(st);
-        }
-        for (const st of affected) {
-          await putCfg('/api/config/stations/' + encodeURIComponent(st.id), st);
-        }
-        if (affected.length) {
-          setStatus(`Плейлог сохранён, ссылки обновлены в станциях: ${affected.map(s => s.id).join(', ')}`);
-        } else {
-          setStatus('Плейлог сохранён');
-        }
-      } else {
-        setStatus('Плейлог сохранён');
-      }
+      let result;
+      if (origId) result = await putCfg('/api/config/playlogs/' + encodeURIComponent(origId), pl);
+      else result = await postCfg('/api/config/playlogs', pl);
+      // Каскад ссылок при переименовании id делает сервер
+      const cascaded = result.cascaded_stations || [];
+      setStatus(cascaded.length
+        ? `Плейлог сохранён, ссылки обновлены в станциях: ${cascaded.join(', ')}`
+        : 'Плейлог сохранён');
       await loadPlaylogs();
     },
   });
