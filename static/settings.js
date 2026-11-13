@@ -1150,6 +1150,35 @@ function renderGeneral() {
   panel.appendChild(form);
 }
 
+// ── WebSocket: обновление гридов при изменении конфига (в т.ч. из других вкладок) ──
+
+function connectWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.addEventListener('message', async (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type !== 'config_reloaded') return;
+    if (modalStack.length) return;  // не дёргать state под открытым редактором
+    try {
+      [state.secrets, state.playlogs, state.users, state.ldap, state.settings] =
+        await Promise.all([
+          getCfg('/api/config/secrets'),
+          getCfg('/api/config/playlogs'),
+          getCfg('/api/config/users'),
+          getCfg('/api/config/ldap'),
+          getCfg('/api/config/settings'),
+        ]);
+      await loadStations();
+      renderPlaylogs();
+      renderAuth();
+      renderUsers();
+      renderGeneral();
+    } catch (_) { /* не критично */ }
+  });
+  ws.addEventListener('close', () => setTimeout(connectWs, 3000));
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════════════════
@@ -1169,6 +1198,7 @@ function renderGeneral() {
     renderAuth();
     renderUsers();
     renderGeneral();
+    connectWs();
   } catch (exc) {
     if (String(exc.message).includes('403') || String(exc.message).includes('Admin')) {
       document.body.innerHTML =

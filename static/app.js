@@ -1719,7 +1719,18 @@ function connectWebSocket() {
       if (msg.type === 'availability_update' && currentChannel && msg.channel_id === currentChannel.id) {
         Timeline.addAvailability(msg.added || [], msg.removed || []);
       } else if (msg.type === 'config_reloaded') {
-        loadStations().then(buildChannelDropdown);
+        loadStations().then(() => {
+          buildChannelDropdown();
+          if (currentChannel) {
+            // Канал мог быть переименован/удалён — найти заново по id
+            const found = stations.flatMap(s => s.channels).find(c => c.id === currentChannel.id);
+            if (found) {
+              currentChannel = found;
+              Timeline.refreshAvailability();
+              loadPlaylist();
+            }
+          }
+        });
         _refreshIndexStatus().catch(() => {});
       } else if (msg.type === 'cache_loaded') {
         _handleCacheLoaded(msg);
