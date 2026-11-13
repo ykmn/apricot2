@@ -7,6 +7,19 @@
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/settings.css">
   <link rel="icon" href="/static/apricot.svg" sizes="any" type="image/svg+xml">
+  <script>
+  // Тема — та же логика, что на главной странице (app.js):
+  // ручной выбор в localStorage действует до ближайшего перехода, дальше авто (светлая 09–18).
+  (function () {
+    function autoTheme() { var h = new Date().getHours(); return (h >= 9 && h < 18) ? 'light' : 'dark'; }
+    var theme = autoTheme();
+    try {
+      var obj = JSON.parse(localStorage.getItem('apricot-theme') || 'null');
+      if (obj && obj.until && Date.now() < obj.until) theme = obj.value;
+    } catch (e) {}
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+  </script>
 </head>
 <body>
 <div id="settings-app">

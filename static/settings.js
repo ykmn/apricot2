@@ -66,6 +66,7 @@ function renderModal() {
   const top = modalStack[modalStack.length - 1];
   if (!top) { modal.classList.add('hidden'); return; }
   modal.classList.remove('hidden');
+  $('.cfg-modal-box', modal).classList.toggle('cfg-modal-wide', !!top.wide);
   $('#cfg-modal-title').textContent = top.title;
   $('#cfg-modal-error').classList.add('hidden');
   const body = $('#cfg-modal-body');
@@ -89,6 +90,16 @@ $('#cfg-modal-save').addEventListener('click', async () => {
   } catch (exc) {
     errBox.textContent = String(exc.message || exc);
     errBox.classList.remove('hidden');
+  }
+});
+
+// Esc закрывает верхний диалог: сначала подтверждение, затем редактор
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!$('#cfg-confirm').classList.contains('hidden')) {
+    $('#cfg-confirm-cancel').click();
+  } else if (modalStack.length) {
+    popModal();
   }
 });
 
@@ -122,14 +133,22 @@ const state = {
 function smbToString(smb) {
   if (!smb) return '';
   let s = '\\\\' + smb.host + '\\' + smb.share;
-  if (smb.path) s += '\\' + String(smb.path).replace(/^\\+|\\+$/g, '');
+  if (smb.path) {
+    // Нормализуем смешанные слэши (в YAML путь может быть записан через "/")
+    const p = String(smb.path).replace(/[\\/]+/g, '\\').replace(/^\\+|\\+$/g, '');
+    if (p) s += '\\' + p;
+  }
   return s;
 }
 
 function parseSmbString(str) {
-  const m = String(str).trim().match(/^\\\\([^\\]+)\\([^\\]+)(?:\\(.*))?$/);
+  const m = String(str).trim().match(/^[\\/]{2}([^\\/]+)[\\/]+([^\\/]+)(?:[\\/]+(.*))?$/);
   if (!m) throw new Error('SMB-путь должен быть вида \\\\HOST\\SHARE\\папка\\…');
-  const smb = { host: m[1], share: m[2], path: (m[3] || '').replace(/\\+$/, '') };
+  const smb = {
+    host: m[1],
+    share: m[2],
+    path: (m[3] || '').replace(/[\\/]+/g, '\\').replace(/\\+$/, ''),
+  };
   return smb;
 }
 
@@ -245,11 +264,12 @@ function openStationEditor(station, isNew) {
   pushModal({
     title: (origId ? 'Станция: ' : 'Новая станция') + (st.name || ''),
     saveLabel: 'Сохранить',
+    wide: true,
     render() {
       const form = el('div', { class: 'cfg-form' });
 
-      const idInput = el('input', { type: 'text', name: 'id', value: st.id });
-      const nameInput = el('input', { type: 'text', name: 'name', value: st.name });
+      const idInput = el('input', { type: 'text', name: 'id', value: st.id, placeholder: 'europaplus' });
+      const nameInput = el('input', { type: 'text', name: 'name', value: st.name, placeholder: 'Европа Плюс' });
       // Auto-suggest station id from name while id untouched
       let idDirty = !!st.id;
       idInput.addEventListener('input', () => { idDirty = true; });
@@ -352,8 +372,8 @@ function openChannelEditor(st, chIndex, onDone) {
     render() {
       const form = el('div', { class: 'cfg-form' });
 
-      const nameInput = el('input', { type: 'text', name: 'name', value: ch.name });
-      const idInput = el('input', { type: 'text', name: 'id', value: ch.id });
+      const nameInput = el('input', { type: 'text', name: 'name', value: ch.name, placeholder: 'Европа Плюс FM' });
+      const idInput = el('input', { type: 'text', name: 'id', value: ch.id, placeholder: 'europaplus_fm' });
       // id = <stationId>_<translit(name)> until user edits id manually
       let idDirty = !isNew;
       idInput.addEventListener('input', () => { idDirty = true; });
@@ -405,8 +425,8 @@ function openChannelEditor(st, chIndex, onDone) {
       for (const r of rates) srSel.appendChild(el('option', { value: String(r), text: String(r) }));
       srSel.value = String(ch.sample_rate || 44100);
 
-      const ffInput = el('input', { type: 'text', name: 'folder_format', value: ch.folder_format || '%Y-%m-%d' });
-      const tfInput = el('input', { type: 'text', name: 'file_format', value: ch.file_format || '%H-%M-%S' });
+      const ffInput = el('input', { type: 'text', name: 'folder_format', value: ch.folder_format || '', placeholder: '%Y-%m-%d' });
+      const tfInput = el('input', { type: 'text', name: 'file_format', value: ch.file_format || '', placeholder: '%H-%M-%S' });
 
       form.appendChild(el('div', { class: 'cfg-row' },
         el('label', null, el('span', { text: 'Расширение файлов' }), extSel),
@@ -496,9 +516,24 @@ function renderPlaylogs() {
         el('button', {
           class: 'cfg-del', text: 'Удалить…',
           onclick: () => confirmDlg(
-            `Удалить плейлог «${pl.name}» (${pl.id})? Файл будет удалён.`,
+            `Удалить плейлог «${pl.name}» (${pl.id})? Файл будет удалён, ссылки в каналах очищены.`,
             async () => {
               await delCfg('/api/config/playlogs/' + encodeURIComponent(pl.id));
+              // Каскад: убрать ссылки на удалённый плейлог из всех каналов
+              await loadStations();
+              const affected = [];
+              for (const st of state.stations) {
+                let dirty = false;
+                for (const ch of st.channels || []) {
+                  const before = (ch.playlogs || []).length;
+                  ch.playlogs = (ch.playlogs || []).filter(id => id !== pl.id);
+                  if (ch.playlogs.length !== before) dirty = true;
+                }
+                if (dirty) affected.push(st);
+              }
+              for (const st of affected) {
+                await putCfg('/api/config/stations/' + encodeURIComponent(st.id), st);
+              }
               setStatus('Плейлог удалён');
               await loadPlaylogs();
             }),
@@ -548,11 +583,12 @@ function openPlaylogEditor(playlog, isNew) {
 
   pushModal({
     title: (origId ? 'Плейлог: ' : 'Новый плейлог') + (pl.name || ''),
+    wide: true,
     render() {
       const form = el('div', { class: 'cfg-form' });
 
-      const idInput = el('input', { type: 'text', name: 'id', value: pl.id });
-      const nameInput = el('input', { type: 'text', name: 'name', value: pl.name });
+      const idInput = el('input', { type: 'text', name: 'id', value: pl.id, placeholder: 'europaplus' });
+      const nameInput = el('input', { type: 'text', name: 'name', value: pl.name, placeholder: 'Европа Плюс' });
       let idDirty = !!pl.id;
       idInput.addEventListener('input', () => { idDirty = true; });
       nameInput.addEventListener('input', () => {
@@ -593,14 +629,14 @@ function openPlaylogEditor(playlog, isNew) {
           });
           const secretSel = secretSelect(src.smb ? src.smb.secret : null);
           secretSel.name = `src_secret_${i}`;
-          const maskInput = el('input', { type: 'text', name: `src_mask_${i}`, value: src.file_mask || '%Y-%m-%d.log' });
+          const maskInput = el('input', { type: 'text', name: `src_mask_${i}`, value: src.file_mask || '', placeholder: '%Y-%m-%d.log' });
           const encSel = el('select', { name: `src_enc_${i}` },
             el('option', { value: 'windows-1251', text: 'windows-1251' }),
             el('option', { value: 'utf-8', text: 'UTF-8' }),
           );
           encSel.value = (src.encoding || 'windows-1251').toLowerCase() === 'utf-8' ? 'utf-8' : 'windows-1251';
-          const delimInput = el('input', { type: 'text', name: `src_delim_${i}`, value: src.delimiter ?? ',' });
-          const hdrInput = el('input', { type: 'text', name: `src_hdr_${i}`, value: src.header_skip_prefix || 'FIELD LIST' });
+          const delimInput = el('input', { type: 'text', name: `src_delim_${i}`, value: src.delimiter ?? '', placeholder: ',' });
+          const hdrInput = el('input', { type: 'text', name: `src_hdr_${i}`, value: src.header_skip_prefix || '', placeholder: 'FIELD LIST' });
 
           fs.appendChild(el('label', null, el('span', { text: 'SMB-путь (одной строкой)' }), smbInput));
           fs.appendChild(el('div', { class: 'cfg-row' },
@@ -634,45 +670,55 @@ function openPlaylogEditor(playlog, isNew) {
       const fCol1 = el('div'), fCol2 = el('div');
       fCol1.style.flex = fCol2.style.flex = '1';
       Object.keys(DEFAULT_FIELDS).forEach((key, idx) => {
-        const inp = el('input', { type: 'text', name: 'field_' + key, value: pl.fields[key] || '' });
+        const inp = el('input', {
+          type: 'text', name: 'field_' + key,
+          value: pl.fields[key] || '', placeholder: DEFAULT_FIELDS[key],
+        });
         (idx % 2 ? fCol2 : fCol1).appendChild(el('label', null, el('span', { text: key }), inp));
       });
       fRow.appendChild(fCol1); fRow.appendChild(fCol2);
       fieldsFs.appendChild(fRow);
       form.appendChild(fieldsFs);
 
-      // ── class_colors / class_names as editable key→value rows
-      const kvEditor = (legend, obj, withColor) => {
-        const fs = el('fieldset', { class: 'cfg-fieldset', 'data-kv': legend });
-        fs.appendChild(el('legend', { text: legend }));
-        const list = el('div');
-        const addRow = (k, v) => {
-          const keyInp = el('input', { type: 'text', value: k, placeholder: 'Класс' });
-          keyInp.style.flex = '0 0 90px';
-          let valInp;
-          if (withColor) {
-            valInp = el('input', { type: 'color', value: /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#424242' });
-          } else {
-            valInp = el('input', { type: 'text', value: v, placeholder: 'Название' });
-          }
-          list.appendChild(el('div', { class: 'cfg-kv-row' },
-            keyInp, valInp,
+      // ── Классы: цвета и названия в одной таблице
+      const clsFs = el('fieldset', { class: 'cfg-fieldset' });
+      clsFs.appendChild(el('legend', { text: 'Классы (цвет и название)' }));
+      const clsTable = el('table', { class: 'cfg-cls-table', 'data-cls': '1' });
+      const clsBody = el('tbody');
+      const addClsRow = (k) => {
+        const keyInp = el('input', {
+          type: 'text', value: k, placeholder: 'Класс', name: 'cls_key',
+        });
+        const colorInp = el('input', {
+          type: 'color', name: 'cls_color',
+          value: /^#[0-9a-fA-F]{6}$/.test(pl.class_colors[k]) ? pl.class_colors[k] : '#424242',
+        });
+        const nameInp = el('input', {
+          type: 'text', value: pl.class_names[k] || '', placeholder: 'Название', name: 'cls_name',
+        });
+        clsBody.appendChild(el('tr', { class: 'cfg-cls-row' },
+          el('td', { class: 'cfg-cls-key' }, keyInp),
+          el('td', { class: 'cfg-cls-color' }, colorInp),
+          el('td', null, nameInp),
+          el('td', { class: 'cfg-cls-del' },
             el('button', {
               class: 'cfg-kv-del cfg-del', text: '✕',
-              onclick: (ev) => { ev.preventDefault(); ev.target.closest('.cfg-kv-row').remove(); },
-            }),
-          ));
-        };
-        for (const [k, v] of Object.entries(obj)) addRow(k, v);
-        fs.appendChild(list);
-        fs.appendChild(el('button', {
-          class: 'btn-sm', text: '+ Класс',
-          onclick: (ev) => { ev.preventDefault(); addRow('', withColor ? '#424242' : ''); },
-        }));
-        return fs;
+              onclick: (ev) => { ev.preventDefault(); ev.target.closest('tr').remove(); },
+            })),
+        ));
       };
-      form.appendChild(kvEditor('Цвета классов', pl.class_colors, true));
-      form.appendChild(kvEditor('Названия классов', pl.class_names, false));
+      const allKeys = [...new Set([...Object.keys(pl.class_colors), ...Object.keys(pl.class_names)])];
+      allKeys.forEach(addClsRow);
+      clsTable.appendChild(el('thead', null, el('tr', null,
+        el('th', { text: 'Класс' }), el('th', { text: 'Цвет' }), el('th', { text: 'Название' }), el('th'),
+      )));
+      clsTable.appendChild(clsBody);
+      clsFs.appendChild(clsTable);
+      clsFs.appendChild(el('button', {
+        class: 'btn-sm', text: '+ Класс',
+        onclick: (ev) => { ev.preventDefault(); addClsRow(''); },
+      }));
+      form.appendChild(clsFs);
 
       return form;
     },
@@ -706,22 +752,43 @@ function openPlaylogEditor(playlog, isNew) {
       }
       pl.fields = fields;
 
-      const readKv = (legend) => {
-        const fs = body.querySelector(`fieldset[data-kv="${legend}"]`);
-        const out = {};
-        fs.querySelectorAll('.cfg-kv-row').forEach(row => {
-          const inputs = row.querySelectorAll('input');
-          const k = inputs[0].value.trim();
-          if (k) out[k] = inputs[1].value;
-        });
-        return out;
-      };
-      pl.class_colors = readKv('Цвета классов');
-      pl.class_names = readKv('Названия классов');
+      const colors = {}, names = {};
+      body.querySelectorAll('.cfg-cls-row').forEach(row => {
+        const k = $('input[name=cls_key]', row).value.trim();
+        if (!k) return;
+        colors[k] = $('input[name=cls_color]', row).value;
+        const nm = $('input[name=cls_name]', row).value.trim();
+        if (nm) names[k] = nm;
+      });
+      pl.class_colors = colors;
+      pl.class_names = names;
 
       if (origId) await putCfg('/api/config/playlogs/' + encodeURIComponent(origId), pl);
       else await postCfg('/api/config/playlogs', pl);
-      setStatus('Плейлог сохранён');
+
+      // Каскад: ID переименован — обновить ссылки во всех каналах всех станций
+      if (origId && origId !== pl.id) {
+        await loadStations();
+        const affected = [];
+        for (const st of state.stations) {
+          let dirty = false;
+          for (const ch of st.channels || []) {
+            const idx = (ch.playlogs || []).indexOf(origId);
+            if (idx !== -1) { ch.playlogs[idx] = pl.id; dirty = true; }
+          }
+          if (dirty) affected.push(st);
+        }
+        for (const st of affected) {
+          await putCfg('/api/config/stations/' + encodeURIComponent(st.id), st);
+        }
+        if (affected.length) {
+          setStatus(`Плейлог сохранён, ссылки обновлены в станциях: ${affected.map(s => s.id).join(', ')}`);
+        } else {
+          setStatus('Плейлог сохранён');
+        }
+      } else {
+        setStatus('Плейлог сохранён');
+      }
       await loadPlaylogs();
     },
   });
@@ -830,13 +897,13 @@ function openDomainEditor(cfg, index, onDone) {
       const form = el('div', { class: 'cfg-form' });
       form.appendChild(el('div', { class: 'cfg-row' },
         el('label', null, el('span', { text: 'Имя (NetBIOS)' }),
-          el('input', { type: 'text', name: 'name', value: d.name || '' })),
+          el('input', { type: 'text', name: 'name', value: d.name || '', placeholder: 'EMG' })),
         el('label', null, el('span', { text: 'Сервер (ldap://…)' }),
-          el('input', { type: 'text', name: 'server', value: d.server || '' })),
+          el('input', { type: 'text', name: 'server', value: d.server || '', placeholder: 'ldap://dc01.emg.local' })),
       ));
       form.appendChild(el('div', { class: 'cfg-row' },
         el('label', null, el('span', { text: 'Base DN' }),
-          el('input', { type: 'text', name: 'base_dn', value: d.base_dn || '' })),
+          el('input', { type: 'text', name: 'base_dn', value: d.base_dn || '', placeholder: 'DC=emg,DC=local' })),
         el('label', null, el('span', { text: 'Сервисный аккаунт (bind secret)' }),
           (() => { const s = secretSelect(d.bind_secret); s.name = 'bind_secret'; return s; })()),
       ));
@@ -914,13 +981,13 @@ function openUserEditor(user) {
     render() {
       const form = el('div', { class: 'cfg-form' });
       const nameInput = el('input', {
-        type: 'text', name: 'username', value: user ? user.username : '',
+        type: 'text', name: 'username', value: user ? user.username : '', placeholder: 'ivanov',
       });
       if (!isNew) nameInput.readOnly = true;
       form.appendChild(el('label', null, el('span', { text: 'Имя пользователя' }), nameInput));
       form.appendChild(el('label', null,
         el('span', { text: isNew ? 'Пароль' : 'Новый пароль (пусто — не менять)' }),
-        el('input', { type: 'password', name: 'password', autocomplete: 'new-password' }),
+        el('input', { type: 'password', name: 'password', autocomplete: 'new-password', placeholder: '••••••••' }),
       ));
       const admCb = el('input', { type: 'checkbox', name: 'is_admin' });
       admCb.checked = user ? !!user.is_admin : false;
@@ -958,8 +1025,8 @@ function renderGeneral() {
   const ssl = srv.ssl || {};
   const form = el('div', { class: 'cfg-form', style: 'max-width:900px' });
 
-  const text = (name, val, ph) => el('input', { type: 'text', name, value: esc(val), placeholder: ph || '' });
-  const num = (name, val) => el('input', { type: 'number', name, value: esc(val) });
+  const text = (name, val, ph) => el('input', { type: 'text', name, value: val == null ? '' : esc(val), placeholder: ph || '' });
+  const num = (name, val, ph) => el('input', { type: 'number', name, value: val == null ? '' : esc(val), placeholder: ph == null ? '' : String(ph) });
   const flag = (name, val) => {
     const cb = el('input', { type: 'checkbox', name });
     cb.checked = !!val;
@@ -973,9 +1040,9 @@ function renderGeneral() {
   const serverFs = el('fieldset', { class: 'cfg-fieldset' });
   serverFs.appendChild(el('legend', { text: 'Сервер' }));
   serverFs.appendChild(el('div', { class: 'cfg-row' },
-    el('label', null, el('span', { text: 'Хост' }), text('srv_host', srv.host ?? '0.0.0.0')),
-    el('label', null, el('span', { text: 'Порт' }), num('srv_port', srv.port ?? 443)),
-    el('label', null, el('span', { text: 'TTL сессии, сек' }), num('srv_session_ttl', srv.session_ttl ?? 604800)),
+    el('label', null, el('span', { text: 'Хост' }), text('srv_host', srv.host, '0.0.0.0')),
+    el('label', null, el('span', { text: 'Порт' }), num('srv_port', srv.port, 443)),
+    el('label', null, el('span', { text: 'TTL сессии, сек' }), num('srv_session_ttl', srv.session_ttl, 604800)),
   ));
   const logScr = el('select', { name: 'srv_log_screen' });
   const logFile = el('select', { name: 'srv_log_file' });
@@ -993,9 +1060,9 @@ function renderGeneral() {
   sslCb.checked = !!ssl.enabled;
   serverFs.appendChild(el('label', { class: 'cfg-flag' }, sslCb, el('span', { text: 'HTTPS (SSL) включён' })));
   serverFs.appendChild(el('div', { class: 'cfg-row' },
-    el('label', null, el('span', { text: 'SSL сертификат' }), text('ssl_cert', ssl.cert ?? '')),
-    el('label', null, el('span', { text: 'SSL ключ' }), text('ssl_key', ssl.key ?? '')),
-    el('label', null, el('span', { text: 'Порт редиректа HTTP→HTTPS' }), num('ssl_redirect', ssl.http_redirect_port ?? 80)),
+    el('label', null, el('span', { text: 'SSL сертификат' }), text('ssl_cert', ssl.cert, 'ssl/cert.crt')),
+    el('label', null, el('span', { text: 'SSL ключ' }), text('ssl_key', ssl.key, 'ssl/key.key')),
+    el('label', null, el('span', { text: 'Порт редиректа HTTP→HTTPS' }), num('ssl_redirect', ssl.http_redirect_port, 80)),
   ));
   form.appendChild(serverFs);
 
@@ -1003,9 +1070,9 @@ function renderGeneral() {
   miscFs.appendChild(el('legend', { text: 'Фоновые задачи' }));
   miscFs.appendChild(el('div', { class: 'cfg-row' },
     el('label', null, el('span', { text: 'Опрос SMB-шар, сек' }),
-      num('watcher_poll', (s.watcher || {}).poll_interval ?? 120)),
+      num('watcher_poll', (s.watcher || {}).poll_interval, 120)),
     el('label', null, el('span', { text: 'Обновление сегодняшнего плейлога, сек' }),
-      num('pl_refresh', (s.playlogs || {}).today_refresh_interval ?? 1800)),
+      num('pl_refresh', (s.playlogs || {}).today_refresh_interval, 1800)),
   ));
   const rescanCb = el('input', { type: 'checkbox', name: 'rescan_all' });
   rescanCb.checked = !!(s.indexing || {}).rescan_all_on_startup;
@@ -1025,18 +1092,18 @@ function renderGeneral() {
     el('label', null, el('span', { text: 'Формат по умолчанию' }), expFmt),
     el('label', null, el('span', { text: 'Битрейт по умолчанию' }), expBr),
     el('label', null, el('span', { text: 'Хранение экспорта, дней' }),
-      num('exp_retention', (s.export || {}).retention_days ?? 1)),
+      num('exp_retention', (s.export || {}).retention_days, 1)),
     el('label', null, el('span', { text: 'Время очистки (HH:MM)' }),
-      text('exp_cleanup', (s.export || {}).cleanup_time ?? '03:00')),
+      text('exp_cleanup', (s.export || {}).cleanup_time, '03:00')),
   ));
   form.appendChild(expFs);
 
   const miscFs2 = el('fieldset', { class: 'cfg-fieldset' });
   miscFs2.appendChild(el('legend', { text: 'Прочее' }));
   miscFs2.appendChild(el('div', { class: 'cfg-row' },
-    el('label', null, el('span', { text: 'Путь к ffmpeg' }), text('ffmpeg_path', s.ffmpeg_path ?? 'ffmpeg')),
-    el('label', null, el('span', { text: 'Часовой пояс UI' }), text('ui_tz', (s.ui || {}).timezone ?? 'Europe/Moscow')),
-    el('label', null, el('span', { text: 'Репозиторий обновлений' }), text('update_repo', (s.update || {}).repo_url ?? '')),
+    el('label', null, el('span', { text: 'Путь к ffmpeg' }), text('ffmpeg_path', s.ffmpeg_path, 'ffmpeg')),
+    el('label', null, el('span', { text: 'Часовой пояс UI' }), text('ui_tz', (s.ui || {}).timezone, 'Europe/Moscow')),
+    el('label', null, el('span', { text: 'Репозиторий обновлений' }), text('update_repo', (s.update || {}).repo_url, 'https://github.com/…/apricot2')),
   ));
   form.appendChild(miscFs2);
 

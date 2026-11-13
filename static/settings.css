@@ -13,7 +13,8 @@
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
 }
 
 #settings-back {
@@ -23,28 +24,29 @@
   padding: 0 6px;
 }
 
-#settings-back:hover { color: var(--accent2, #7ec8ff); }
+#settings-back:hover { color: var(--accent2); }
 
 #settings-title { font-size: 17px; font-weight: 600; }
 
 #settings-status {
   margin-left: auto;
   font-size: 12px;
-  color: var(--text2, #999);
+  color: var(--text2);
 }
 
 #settings-tabs {
   display: flex;
   gap: 2px;
   padding: 6px 14px 0;
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
 }
 
 .stab {
   background: none;
   border: 1px solid transparent;
   border-bottom: none;
-  color: var(--text2, #999);
+  color: var(--text2);
   padding: 7px 16px;
   cursor: pointer;
   font-size: 13px;
@@ -55,8 +57,8 @@
 
 .stab.active {
   color: var(--text);
-  background: var(--panel-bg, #1e1e1e);
-  border-color: var(--border, #333);
+  background: var(--bg);
+  border-color: var(--border);
 }
 
 #settings-panels { flex: 1; overflow-y: auto; padding: 14px; }
@@ -77,19 +79,19 @@
 .cfg-table th, .cfg-table td {
   text-align: left;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 
 .cfg-table th {
-  color: var(--text2, #999);
+  color: var(--text2);
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: .04em;
 }
 
-.cfg-table tr:hover td { background: var(--hover, rgba(255,255,255,.04)); }
+.cfg-table tbody tr:hover td { background: var(--bg3); }
 
 .cfg-table .cfg-actions { white-space: nowrap; text-align: right; }
 
@@ -99,17 +101,18 @@
   font-size: 12px;
   cursor: pointer;
   border-radius: 4px;
-  border: 1px solid var(--border, #444);
-  background: var(--panel-bg, #242424);
+  border: 1px solid var(--border);
+  background: var(--bg3);
   color: var(--text);
 }
 
-.cfg-actions button:hover { border-color: var(--accent2, #7ec8ff); }
-.cfg-actions button.cfg-del:hover { border-color: #e06060; color: #ff8a8a; }
+.cfg-actions button:hover { border-color: var(--accent2); }
+.cfg-actions button.cfg-del:hover { border-color: var(--danger); color: #ff8a8a; }
 
 /* ── Forms inside modal ─────────────────────────────────────────────── */
 
 .cfg-modal-box { max-width: 720px; width: 92vw; max-height: 88vh; overflow-y: auto; }
+.cfg-modal-box.cfg-modal-wide { max-width: 1280px; width: 96vw; }
 
 .cfg-form label {
   display: block;
@@ -119,7 +122,7 @@
 
 .cfg-form label > span {
   display: block;
-  color: var(--text2, #999);
+  color: var(--text2);
   font-size: 12px;
   margin-bottom: 3px;
 }
@@ -134,39 +137,53 @@
   padding: 6px 8px;
   font-size: 13px;
   border-radius: 4px;
-  border: 1px solid var(--border, #444);
-  background: var(--bg, #141414);
+  border: 1px solid var(--border);
+  background: var(--bg3);
   color: var(--text);
 }
+
+.cfg-form input::placeholder,
+.cfg-form textarea::placeholder { color: var(--text2); opacity: .55; }
+
+.cfg-form input:focus,
+.cfg-form select:focus,
+.cfg-form textarea:focus { border-color: var(--accent); outline: none; }
 
 .cfg-form input:read-only { opacity: .55; }
 
 .cfg-form textarea { min-height: 80px; font-family: monospace; }
 
 .cfg-row { display: flex; gap: 12px; }
-.cfg-row > label { flex: 1; }
+.cfg-row > label { flex: 1; min-width: 0; }
 
 .cfg-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
   padding: 6px 8px;
-  border: 1px solid var(--border, #444);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  max-height: 120px;
+  max-height: 140px;
   overflow-y: auto;
 }
 
 .cfg-checks label {
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px 1fr;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   margin: 0;
+  padding: 3px 6px;
   font-size: 12px;
   white-space: nowrap;
+  cursor: pointer;
+  border-radius: 3px;
 }
 
-.cfg-hint { font-size: 11px; color: var(--text2, #999); margin-top: 2px; }
+.cfg-checks label:hover { background: var(--bg3); }
+.cfg-checks input[type="checkbox"] { margin: 0; pointer-events: none; }
+
+.cfg-hint { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
 .cfg-error {
   color: #ff8a8a;
@@ -184,15 +201,30 @@
   margin-bottom: 4px;
 }
 
-.cfg-subtable-header span { font-size: 12px; color: var(--text2, #999); font-weight: 600; }
+.cfg-subtable-header span { font-size: 12px; color: var(--text2); font-weight: 600; }
 
 .cfg-kv-row { display: flex; gap: 6px; margin-bottom: 4px; align-items: center; }
 .cfg-kv-row input { flex: 1; }
 .cfg-kv-row input[type="color"] { flex: 0 0 44px; padding: 1px; height: 28px; }
 .cfg-kv-row .cfg-kv-del { flex: 0 0 auto; }
 
+/* Объединённая таблица классов (класс | цвет | название) */
+.cfg-cls-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+.cfg-cls-table th {
+  text-align: left;
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+}
+.cfg-cls-table td { padding: 2px 6px 2px 0; vertical-align: middle; }
+.cfg-cls-table td.cfg-cls-key { width: 110px; }
+.cfg-cls-table td.cfg-cls-color { width: 62px; }
+.cfg-cls-table input[type="color"] { width: 100%; padding: 1px; height: 28px; }
+.cfg-cls-table td.cfg-cls-del { width: 30px; padding-right: 0; }
+
 .cfg-fieldset {
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
   margin: 10px 0;
@@ -200,7 +232,7 @@
 
 .cfg-fieldset > legend {
   font-size: 12px;
-  color: var(--text2, #999);
+  color: var(--text2);
   padding: 0 6px;
 }
 
